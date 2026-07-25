@@ -327,6 +327,12 @@ toute regression.
 
 ---
 
+### Priorité 9 — Intégration transparente de l'API WFP DataBridges (Nouvelle fonctionnalité v1.1.0)
+
+Dans la version 1.1.0, l'API WFP (World Food Programme DataBridges) sera directement intégrée pour le chargement des données de prix réelles. L'utilisateur n'aura pas besoin d'inscrire ou d'injecter une clé API personnelle (`WFP_API_Token`). Le client gérera automatiquement l'accès transparent aux endpoints publics ou l'utilisation d'un jeton par défaut embarqué.
+
+---
+
 ## 6. Problemes de moindre urgence (V1.2.0 ou ulterieure)
 
 Ces points ne bloquent pas le fonctionnement actuel.
@@ -351,10 +357,13 @@ Ces points ne bloquent pas le fonctionnement actuel.
 
 KadiPy v1.0.0 est un package sérieux et bien architecturé pour un premier release. Les trois modules fonctionnent ensemble de façon cohérente, la gestion du mode hors ligne est une vraie valeur ajoutée, et la qualité de la documentation interne est au-dessus de la moyenne des projets open source de cette taille.
 
-Les corrections prioritaires pour la v1.1.0 se concentrent sur deux axes :
+Les corrections prioritaires pour la v1.1.0 se concentrent sur trois axes :
 
 1. **Exactitude des données :** le bug du rapport de pipeline (Problème 8), le flag `is_simulated` incorrectement force (Problème 6), et le compteur de dates errone (Problème 9) induisent les utilisateurs en erreur sur la qualite des donnees qu'ils traitent.
 
-2. **Coherence de la configuration :** la desynchronisation entre `requirements.txt` et `pyproject.toml` (Problème 13) peut creer des problemes d'installation chez les utilisateurs finaux.
+2. **Accès direct aux données WFP :** intégration de l'API WFP sans nécessiter de clé utilisateur, permettant un chargement instantané des données de marché réelles.
+
+3. **Coherence de la configuration :** la desynchronisation entre `requirements.txt` et `pyproject.toml` (Problème 13) peut creer des problemes d'installation chez les utilisateurs finaux.
 
 La correction de l'exactitude scientifique du SPI (Problème 3) et la centralisation des bornes GPS (Problème 4) peuvent suivre sans urgence absolue, mais sont importantes pour la credibilite du package aupres des agronomes et chercheurs qui constituent le public cible.
+
