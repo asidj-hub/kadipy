@@ -315,7 +315,10 @@ class TestDataPipeline:
         )
         assert isinstance(df, pd.DataFrame)
         assert len(df) > 0
-        assert "etapes_appliquees" in rapport
+        # Vérification des clés de la structure documentée
+        assert "steps_summary" in rapport
+        assert "nb_rows_in" in rapport
+        assert "nb_rows_out" in rapport
 
     def test_get_pipeline_config_structure(self, temp_csv_file):
         """Vérifie la structure de la configuration du pipeline."""
@@ -338,3 +341,135 @@ class TestDataPipeline:
         resultat = pipeline.export_report(chemin_rapport)
         assert resultat is True
         assert (tmp_path / "rapport.json").exists()
+
+    def test_rapport_contient_cles_documentees(self, temp_csv_file, tmp_path):
+        """Vérifie que le rapport de execute() contient toutes les clés documentées."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # Toutes les clés documentées doivent être présentes
+        for cle in ("nb_rows_in", "nb_rows_out", "steps_summary",
+                    "quality_score", "warnings", "cache_utilise", "details"):
+            assert cle in rapport, f"Clé manquante dans le rapport : '{cle}'"
+
+    def test_rapport_nb_rows_in_est_correct(self, temp_csv_file, tmp_path):
+        """Vérifie que nb_rows_in correspond au nombre de lignes chargées brutes."""
+        from kadi.kidas.cache import DataCache
+        import pandas as pd
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        # Référence : lecture directe du fichier sans traitement
+        df_brut = pd.read_csv(temp_csv_file)
+        nb_lignes_brutes = len(df_brut)
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .execute(cache=False)
+        )
+        assert rapport["nb_rows_in"] == nb_lignes_brutes
+
+    def test_rapport_nb_rows_out_est_correct(self, temp_csv_file, tmp_path):
+        """Vérifie que nb_rows_out correspond au nombre de lignes après traitement."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        df, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # nb_rows_out doit correspondre au nombre réel de lignes du DataFrame retourné
+        assert rapport["nb_rows_out"] == len(df)
+
+    def test_rapport_steps_summary_est_liste(self, temp_csv_file, tmp_path):
+        """Vérifie que steps_summary est une liste des noms d'étapes appliquées."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .add_cleaning_step("handle_missing_values", strategy="mean")
+            .execute(cache=False)
+        )
+        assert isinstance(rapport["steps_summary"], list)
+        # Les deux étapes ajoutées doivent être listées dans l'ordre
+        assert rapport["steps_summary"] == ["remove_duplicates", "handle_missing_values"]
+
+    def test_rapport_quality_score_absent_sans_validation(self, temp_csv_file, tmp_path):
+        """Vérifie que quality_score est None quand aucune étape de validation n'est ajoutée."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # Sans étape de validation, quality_score doit valoir None
+        assert rapport["quality_score"] is None
+
+    def test_rapport_quality_score_present_avec_validation(self, temp_csv_file, tmp_path):
+        """Vérifie que quality_score est un dict quand une étape de validation est incluse."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_validation_step({"culture": "str"})
+            .execute(cache=False)
+        )
+        # Avec une étape de validation, quality_score doit être un dict
+        assert rapport["quality_score"] is not None
+        assert isinstance(rapport["quality_score"], dict)
+        assert "overall" in rapport["quality_score"]
+
+    def test_rapport_warnings_est_liste(self, temp_csv_file, tmp_path):
+        """Vérifie que warnings est toujours une liste, même sans avertissement."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .execute(cache=False)
+        )
+        # warnings doit toujours être une liste (jamais None)
+        assert isinstance(rapport["warnings"], list)
+
+    def test_rapport_details_contient_sous_cles(self, temp_csv_file, tmp_path):
+        """Vérifie que details expose les rapports internes attendus."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # La clé details doit regrouper les rapports internes
+        assert isinstance(rapport["details"], dict)
+        for sous_cle in ("source", "nettoyage", "validation", "normalisation"):
+            assert sous_cle in rapport["details"], (
+                f"Sous-clé manquante dans details : '{sous_cle}'"
+            )
