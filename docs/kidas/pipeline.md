@@ -137,14 +137,15 @@ print(f"Lignes en sortie : {rapport['nb_rows_out']}")
 print(f"Lignes supprimées: {rapport['nb_rows_in'] - rapport['nb_rows_out']}")
 
 # Score de qualité global (0 à 1)
-qualite = rapport["quality_score"]
-print(f"Score global     : {qualite['overall']:.2f}")
-print(f"Score complétude : {qualite.get('completeness', 'N/A')}")
-print(f"Score cohérence  : {qualite.get('consistency', 'N/A')}")
+qualite = rapport.get("quality_score")
+if qualite:
+    print(f"Score global     : {qualite['overall']:.2f}")
+    print(f"Score complétude : {qualite.get('completeness', 'N/A')}")
+    print(f"Score cohérence  : {qualite.get('consistency', 'N/A')}")
 
-# Résumé de chaque étape
+# Résumé des étapes appliquées
 for etape in rapport["steps_summary"]:
-    print(f"  [{etape['step']}] {etape['status']} — {etape.get('detail', '')}")
+    print(f"  - Étape : {etape}")
 
 # Avertissements de validation
 for avertissement in rapport["warnings"]:
