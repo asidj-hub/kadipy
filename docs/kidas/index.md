@@ -42,8 +42,8 @@ import kadi.kidas as kidas
 # Chargement, nettoyage automatique et cache
 df, rapport = kidas.load_and_clean("recolte_2024.csv")
 
-print(f"Lignes chargées : {rapport.get('lignes_finales', len(df))}")
-if "quality_score" in rapport:
+print(f"Lignes chargées : {rapport.get('nb_rows_out', len(df))}")
+if rapport.get("quality_score"):
     print(f"Score qualité   : {rapport['quality_score']}")
 ```
 
@@ -68,7 +68,7 @@ df, rapport = (
     .execute(cache=True)
 )
 
-print(rapport["etapes_appliquees"])
+print(rapport["steps_summary"])
 ```
 
 ---
@@ -100,14 +100,14 @@ df, rapport = (
 )
 
 print(rapport.keys())
-# dict_keys(['source', 'etapes_appliquees', 'nettoyage', 'validation', 'normalisation', 'cache_utilise', 'quality_score', 'lignes_finales'])
+# dict_keys(['nb_rows_in', 'nb_rows_out', 'steps_summary', 'quality_score', 'warnings', 'cache_utilise', 'details'])
 
 # Score de qualité (généré par l'étape de validation)
-if "quality_score" in rapport:
+if rapport.get("quality_score"):
     print(f"Score : {rapport['quality_score']}")
 
 # Nombre de lignes finales
-print(f"Lignes en sortie : {rapport['lignes_finales']}")
+print(f"Lignes en sortie : {rapport['nb_rows_out']}")
 ```
 
 ---
