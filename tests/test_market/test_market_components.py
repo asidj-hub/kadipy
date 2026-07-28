@@ -16,6 +16,7 @@ from kadi.market.forecasting import MarketForecasting
 from kadi.market.logistics import MarketLogistics
 from kadi.market.decision_support import DecisionSupport
 from kadi.market.data_ingestion import WFPDataBridgesClient, _get_with_retry
+from kadi.market._cache import vider_cache
 from kadi.market._normalization import (
     normalize_crop_name,
     normalize_market_name,
@@ -142,6 +143,8 @@ def test_market_facade():
 @responses.activate
 def test_wfp_client_fetch_prices():
     """Teste la récupération de données via l'API WFP DataBridges."""
+    # Vider le cache pour éviter la pollution par d'anciens tests
+    vider_cache("savalou_market", "maize")
     client = WFPDataBridgesClient()
     client.token = "fake_token_for_test"
 
