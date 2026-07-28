@@ -34,10 +34,16 @@ Le code a été aligné sur le format canonique documenté (`nb_rows_in`, `nb_ro
 
 **Problème 6** | Module `kadi.market` | Sévérité : **Haute**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Dans `decision_support.py`, la ligne `est_simule = True` écrase le flag réel retourné par `predict_price()`.
-Même avec un historique WFP réel, la recommandation de stockage est toujours marquée comme simulée.
+La ligne `est_simule = True` qui écrasait le flag réel a été remplacée par
+`est_simule = prevision.get("is_simulated", True)`. Le flag est maintenant propagé
+depuis `predict_price()`. La valeur par défaut `True` est conservée si la clé est
+absente, pour ne pas casser le comportement offline.
+
+**Fichiers modifiés :**
+- `kadi/market/decision_support.py` (ligne ~324)
+- `docs/market/decision_support.md` (description du champ `is_simulated`)
 
 **Action :**
 ```python
@@ -55,18 +61,16 @@ est_simule = prevision.get("is_simulated", True)
 
 **Problème 13** | Infrastructure | Sévérité : **Haute**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-`requirements.txt` déclare `xlrd<2.0` et `dask>=2023.1` absents de `pyproject.toml`.
-Un utilisateur installant via PyPI n'aura ni la lecture des `.xls` anciens, ni le support Dask.
+`requirements.txt` a été réécrit comme un alias vers `pyproject.toml` (une seule ligne
+`-e ".[dev]"`), ce qui élimine la désynchronisation à la source. `xlrd<2.0` a été
+ajouté dans les dépendances optionnelles de `pyproject.toml` sous l'extra `[xls]`.
+`dask` a été retiré (non importé dans le code de production).
 
-**Action :** supprimer `requirements.txt` ou déplacer `xlrd` dans les dépendances optionnelles de `pyproject.toml` :
-```toml
-[project.optional-dependencies]
-xls = ["xlrd<2.0"]
-```
-
-**Fichiers :** `requirements.txt`, `pyproject.toml`
+**Fichiers modifiés :**
+- `requirements.txt` (réécrit)
+- `pyproject.toml` (ajout de l'extra `xls`)
 
 ---
 
@@ -206,8 +210,8 @@ Dans la v1.1.0, l'API WFP DataBridges sera intégrée directement. L'utilisateur
 | # | Module | Sévérité | Description courte | Statut |
 |---|--------|----------|--------------------|--------|
 | 8 | `kidas` | Critique | Rapport `execute()` incohérent avec la documentation | `[x]` |
-| 6 | `market` | Haute | `storage_vs_sell_now()` force `is_simulated=True` | `[ ]` |
-| 13 | `config` | Haute | `requirements.txt` désynchronisé avec `pyproject.toml` | `[ ]` |
+| 6 | `market` | Haute | `storage_vs_sell_now()` force `is_simulated=True` | `[x]` |
+| 13 | `config` | Haute | `requirements.txt` désynchronisé avec `pyproject.toml` | `[x]` |
 | 3 | `weather` | Haute | SPI approximé par Z-score au lieu d'une loi Gamma | `[ ]` |
 | 4 | `market` | Haute | Bornes GPS dupliquées en dur au lieu de lire `CONFIG` | `[ ]` |
 | 9 | `kidas` | Haute | `nb_dates_corrigees` calculé incorrectement dans `fix_dates()` | `[ ]` |
