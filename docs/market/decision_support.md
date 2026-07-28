@@ -137,7 +137,7 @@ decision_6m = ds.storage_vs_sell_now(
 | `marge_nette_par_tonne` | `float` | Espérance de gain par tonne |
 | `prix_futur_estime` | `float` | Prix prévu à l'horizon (XOF/tonne) |
 | `horizon_mois` | `int` | Horizon de stockage effectivement utilisé |
-| `is_simulated` | `bool` | Vrai si les prévisions sont fictives |
+| `is_simulated` | `bool` | `True` si les prévisions de prix proviennent du mode simulé (offline ou stub). Propagé depuis `predict_price()`. Vaut `True` par défaut si aucun module de prévision n'est disponible. |
 | `confidence_score` | `float` | Score de confiance de 0 à 1 |
 
 **Composantes du coût de stockage :**
