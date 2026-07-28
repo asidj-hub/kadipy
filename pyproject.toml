@@ -118,6 +118,12 @@ dev = [
     "mkdocs-material>=8.0",
     "mkdocstrings[python]>=0.20",
 ]
+xls = [
+    # Lecture des anciens fichiers .xls (format OLE, antérieurs à Excel 2003)
+    # xlrd >= 2.0 ne supporte plus ce format ; on verrouille la version à <2.0
+    # Installer avec : pip install 'kadipy[xls]'
+    "xlrd<2.0",
+]
 
 # URL officielles du projet, affichées sur la page PyPI
 [project.urls]
