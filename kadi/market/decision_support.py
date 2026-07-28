@@ -300,7 +300,9 @@ class DecisionSupport:
                 - 'marge_nette_par_tonne'  : espérance de gain par tonne
                 - 'prix_futur_estime'      : prix prévu à l'horizon (XOF/tonne)
                 - 'horizon_mois'           : horizon de stockage utilisé
-                - 'is_simulated'           : True si les prévisions sont simulées
+                - 'is_simulated'           : True si les données de prévision sont
+                  simulées (mode offline ou stub). Propagé depuis predict_price().
+                  Vaut True par défaut si aucun module de prévision n'est disponible.
                 - 'confidence_score'       : score de confiance (0-1)
         """
         # Lecture de l'horizon de stockage (paramètre > config > défaut)
@@ -308,6 +310,7 @@ class DecisionSupport:
             mois_stockage = _HORIZON_MOIS_DEFAULT
         jours_stockage = mois_stockage * 30
 
+        # Valeur par défaut : True si aucun module de prévision n'est disponible
         est_simule = True
 
         # Récupération du prix futur estimé via le module de prévision
@@ -321,7 +324,9 @@ class DecisionSupport:
                 variance = (
                     prevision.get("rmse", prevision["predicted_price"] * 0.05) * 1000
                 )
-                est_simule = True  # Le module forecasting V1 reste un stub
+                # Propagation du flag réel retourné par predict_price().
+                # Par défaut True si la clé est absente (comportement offline conservé).
+                est_simule = prevision.get("is_simulated", True)
             except Exception as e:
                 logger.warning(
                     f"Erreur lors de la prévision {crop}/{market}: {e}. "
