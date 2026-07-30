@@ -18,11 +18,17 @@ from .logistics import MarketLogistics
 from .decision_support import DecisionSupport
 from .data_ingestion import WFPDataBridgesClient
 
-# Bornes géographiques du Bénin (avec marge de ~2° pour les zones frontalières)
-_LAT_MIN = 6.0
-_LAT_MAX = 12.5
-_LON_MIN = 0.5
-_LON_MAX = 3.9
+from kadi.config import CONFIG
+
+# Bornes géographiques lues depuis la configuration centrale (CONFIG["weather"]["gps_validation_bbox"]).
+# Les valeurs de repli correspondent aux bornes officielles définies dans config.py.
+# Ne pas modifier ces lignes directement : mettre à jour config.py à la place.
+_bbox = CONFIG.get("weather", {}).get("gps_validation_bbox", {})
+_LAT_MIN = _bbox.get("min_lat", 2.5)
+_LAT_MAX = _bbox.get("max_lat", 12.5)
+_LON_MIN = _bbox.get("min_lon", -1.5)
+_LON_MAX = _bbox.get("max_lon", 4.0)
+
 
 
 def _valider_coordonnees(lat: float, lon: float, location: str):
