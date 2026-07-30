@@ -76,7 +76,7 @@ CONFIG = {
     # ---------------------------------------------------------
     "market": {
         # Ordre de priorité des sources pour récupérer les prix (fallback automatique)
-        "sources_priority": ["wfp-vam", "ratin", "scrape-local"],
+        "sources_priority": ["wfp-vam", "scrape-local"],
 
         # Minimum d'historique requis (en semaines) pour que le modèle ML
         # de prédiction des prix soit fiable
@@ -203,10 +203,6 @@ WFP_VAM_API_URL = os.environ.get(
     "https://hungermap.wfp.org"
 )
 
-RATIN_SCRAPE_URL = os.environ.get(
-    "RATIN_SCRAPE_URL",
-    "https://www.ratin.net"
-)
 
 # Taux de change par défaut pour les conversions de devises
 EXCHANGE_RATES = {
