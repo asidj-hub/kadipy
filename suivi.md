@@ -78,20 +78,24 @@ ajouté dans les dépendances optionnelles de `pyproject.toml` sous l'extra `[xl
 
 **Problème 3** | Module `kadi.weather` | Sévérité : **Haute**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Dans `risk.py` ligne ~88, le SPI est calculé par approximation Z-score au lieu d'un ajustement `scipy.stats.gamma.fit`. Cela peut produire des valeurs incorrectes en période sèche ou pour des distributions fortement asymétriques.
+La méthode `spi()` dans `risk.py` utilisait une approximation Z-score pour
+calculer l'indice SPI. Elle a été remplacée par la méthode standard de
+McKee et al. (1993) :
 
-**Action :**
-```python
-from scipy.stats import gamma as gamma_dist, norm
-valid_data = rolling_sum[rolling_sum > 0]
-shape, loc, scale = gamma_dist.fit(valid_data, floc=0)
-prob_cumul = gamma_dist.cdf(current_val, shape, loc=loc, scale=scale)
-spi_val = norm.ppf(prob_cumul)
-```
+1. Ajustement d'une loi Gamma sur les cumuls non nuls via
+   `scipy.stats.gamma.fit(valid_data, floc=0)`.
+2. Application d'une correction de masse de probabilité pour les jours
+   sans pluie (cumul nul).
+3. Conversion en score SPI via `scipy.stats.norm.ppf`.
 
-**Fichier :** `kadi/weather/risk.py`
+La signature publique de `spi()` est inchangée. La méthode lève maintenant
+`InsufficientData` si le nombre de cumuls non nuls est inférieur à 10.
+
+**Fichiers modifiés :**
+- `kadi/weather/risk.py` (méthode `spi()`, lignes 62-153)
+- `tests/weather/test_risk.py` (nouveaux tests: signe du SPI, cas limites Gamma)
 
 ---
 
@@ -99,20 +103,29 @@ spi_val = norm.ppf(prob_cumul)
 
 **Problème 4** | Module `kadi.market` | Sévérité : **Haute**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Les constantes `_LAT_MIN`, `_LAT_MAX`, `_LON_MIN`, `_LON_MAX` sont définies en dur dans `market/__init__.py` au lieu de lire depuis `CONFIG["weather"]["gps_validation_bbox"]`. Risque d'incohérence si les bornes changent dans `config.py`.
+Les constantes `_LAT_MIN`, `_LAT_MAX`, `_LON_MIN`, `_LON_MAX` étaient
+définies en dur dans `market/__init__.py` avec des valeurs différentes de
+celles de `config.py` (incohérence réelle : `min_lat` valait 6.0 au lieu de
+2.5, `min_lon` valait 0.5 au lieu de -1.5). Elles sont maintenant lues
+depuis `CONFIG["weather"]["gps_validation_bbox"]` avec des valeurs de repli.
 
-**Action :**
+**Action réalisée :**
 ```python
+from kadi.config import CONFIG
+
 _bbox = CONFIG.get("weather", {}).get("gps_validation_bbox", {})
-_LAT_MIN = _bbox.get("min_lat", 6.0)
+_LAT_MIN = _bbox.get("min_lat", 2.5)
 _LAT_MAX = _bbox.get("max_lat", 12.5)
-_LON_MIN = _bbox.get("min_lon", 0.5)
-_LON_MAX = _bbox.get("max_lon", 3.9)
+_LON_MIN = _bbox.get("min_lon", -1.5)
+_LON_MAX = _bbox.get("max_lon", 4.0)
 ```
 
-**Fichier :** `kadi/market/__init__.py` (lignes 22-25)
+**Fichiers modifiés :**
+- `kadi/market/__init__.py` (lignes 21-30)
+- `tests/test_market/test_market_components.py` (ajout de
+  `test_market_bornes_gps_issues_de_config`, mise à jour commentaires)
 
 ---
 
@@ -212,8 +225,8 @@ Dans la v1.1.0, l'API WFP DataBridges sera intégrée directement. L'utilisateur
 | 8 | `kidas` | Critique | Rapport `execute()` incohérent avec la documentation | `[x]` |
 | 6 | `market` | Haute | `storage_vs_sell_now()` force `is_simulated=True` | `[x]` |
 | 13 | `config` | Haute | `requirements.txt` désynchronisé avec `pyproject.toml` | `[x]` |
-| 3 | `weather` | Haute | SPI approximé par Z-score au lieu d'une loi Gamma | `[ ]` |
-| 4 | `market` | Haute | Bornes GPS dupliquées en dur au lieu de lire `CONFIG` | `[ ]` |
+| 3 | `weather` | Haute | SPI approximé par Z-score au lieu d'une loi Gamma | `[x]` |
+| 4 | `market` | Haute | Bornes GPS dupliquées en dur au lieu de lire `CONFIG` | `[x]` |
 | 9 | `kidas` | Haute | `nb_dates_corrigees` calculé incorrectement dans `fix_dates()` | `[ ]` |
 | 5 | `market` | Moyenne | `get_market_functionality_index()` retourne toujours 7.9 | `[ ]` |
 | 16 | CI | Moyenne | Pas de rapport `pytest-cov` dans la CI | `[ ]` |
