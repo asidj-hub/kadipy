@@ -62,40 +62,94 @@ class RiskIndicators:
     def spi(self, window_months: int) -> float:
         """
         Calcule le Standardized Precipitation Index (SPI) pour la période récente.
-        Implémentation simplifiée pour le MVP.
-        
-        :param window_months: Fenêtre d'accumulation en mois.
-        :return: Valeur du SPI.
+
+        La méthode suit la définition originale de McKee et al. (1993) :
+
+        1. Calcul du cumul de précipitations sur la fenêtre temporelle demandée.
+        2. Ajustement d'une loi Gamma sur les cumuls strictement positifs via
+           scipy.stats.gamma.fit (localisation fixée à 0 avec floc=0).
+        3. Application d'une correction de masse de probabilité pour les jours sans
+           pluie (cumul nul) : la probabilité en 0 est répartie proportionnellement
+           à la fréquence observée de jours secs.
+        4. Conversion de la probabilité cumulative en score SPI via la fonction
+           quantile de la loi normale inverse (scipy.stats.norm.ppf).
+
+        Args:
+            window_months (int): Fenêtre d'accumulation en mois.
+
+        Returns:
+            float: Valeur du SPI arrondie à 2 décimales. Vaut 0.0 si tous les
+                cumuls sont identiques (écart-type nul).
+
+        Raises:
+            InsufficientData: Si la série est vide, si le nombre de fenêtres
+                calculées est inférieur à 30, si les cumuls non nuls sont
+                trop peu nombreux (< 10) pour ajuster une loi Gamma, ou si
+                l'ajustement Gamma échoue numériquement.
         """
         if self.rainfall_historical.empty:
             raise InsufficientData("Aucune donnée historique pour le calcul du SPI.")
-            
-        # Cumul de précipitation sur la fenêtre temporelle
+
+        # Calcul des cumuls glissants sur la fenêtre temporelle
         days = window_months * 30
-        rolling_sum = self.rainfall_historical.rolling(window=days, min_periods=days//2).sum()
+        rolling_sum = self.rainfall_historical.rolling(
+            window=days, min_periods=days // 2
+        ).sum()
         rolling_sum = rolling_sum.dropna()
-        
-        if len(rolling_sum) < 30: # Pas assez de données pour faire une loi Gamma
-            raise InsufficientData("Pas assez de jours de données pour ajuster le modèle SPI (minimum 30 requis).")
-            
-        # Ajustement d'une distribution Gamma simplifié
-        # On évite les zéros pour la distribution Gamma
-        valid_data = rolling_sum[rolling_sum > 0]
-        if len(valid_data) == 0:
-            return -3.0 # Extrême sécheresse
-            
-        # Dans un environnement de production, on utiliserait scipy.stats.gamma.fit
-        # et une correction de probabilité mixte pour p(x=0). 
-        # Ici on fait une approximation simple par score Z (loi normale) pour le mock
-        current_val = rolling_sum.iloc[-1]
-        mean_val = rolling_sum.mean()
-        std_val = rolling_sum.std()
-        
-        if std_val == 0:
+
+        # Vérification du nombre minimal de fenêtres
+        if len(rolling_sum) < 30:
+            raise InsufficientData(
+                "Pas assez de jours de données pour ajuster le modèle SPI "
+                "(minimum 30 fenêtres requises)."
+            )
+
+        # Cas dégénéré : tous les cumuls sont identiques, le SPI est nul
+        if rolling_sum.std() == 0:
             return 0.0
-            
-        spi_val = (current_val - mean_val) / std_val
-        return round(float(spi_val), 2)
+
+        # Valeur du cumul courant (point le plus récent de la série)
+        current_val = float(rolling_sum.iloc[-1])
+
+        # Calcul de la proportion de jours sans pluie (correction de masse)
+        n_total = len(rolling_sum)
+        n_zero = int((rolling_sum == 0).sum())
+        q_zero = n_zero / n_total
+
+        # Isolation des cumuls strictement positifs pour l'ajustement Gamma
+        valid_data = rolling_sum[rolling_sum > 0].values
+
+        if len(valid_data) < 10:
+            raise InsufficientData(
+                "Pas assez de cumuls non nuls pour ajuster une loi Gamma "
+                f"(trouvé {len(valid_data)}, minimum 10 requis). "
+                "La période analysée est peut-être trop sèche."
+            )
+
+        # Ajustement de la loi Gamma (floc=0 fixe le paramètre de localisation à 0)
+        try:
+            shape, loc, scale = stats.gamma.fit(valid_data, floc=0)
+        except Exception as exc:
+            raise InsufficientData(
+                f"L'ajustement de la loi Gamma a échoué : {exc}. "
+                "Vérifiez la qualité de la série pluviométrique."
+            ) from exc
+
+        # Calcul de la probabilité cumulative avec correction de masse en 0
+        if current_val == 0:
+            # Les jours sans pluie tombent dans la masse ponctuelle en 0
+            prob_cumul = q_zero / 2.0
+        else:
+            # Probabilité mixte : masse en 0 + CDF Gamma sur les valeurs positives
+            prob_gamma = float(stats.gamma.cdf(current_val, shape, loc=loc, scale=scale))
+            prob_cumul = q_zero + (1.0 - q_zero) * prob_gamma
+
+        # Clip de sécurité pour éviter +/-inf lors de l'appel à norm.ppf
+        prob_cumul = float(np.clip(prob_cumul, 1e-6, 1.0 - 1e-6))
+
+        # Conversion en score SPI via la loi normale inverse
+        spi_val = float(stats.norm.ppf(prob_cumul))
+        return round(spi_val, 2)
 
     def markov_transition(self, threshold_mm: float = 1.0) -> dict:
         """
