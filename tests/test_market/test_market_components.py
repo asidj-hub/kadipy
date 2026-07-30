@@ -306,7 +306,7 @@ def test_market_validation_lon_hors_zone():
     """Teste qu'une longitude hors Bénin lève une ValueError."""
     with pytest.raises(ValueError, match="Longitude"):
         # Latitude valide (9.30, dans la zone Bénin) mais longitude
-        # hors plage (5.00 > 3.9) : seule l'erreur de longitude doit être levée
+        # hors plage (5.00 > max_lon de config.py) : seule l'erreur de longitude doit être levée
         Market(9.30, 5.00, "HorsZone")
 
 
@@ -337,6 +337,29 @@ def test_market_coordonnees_valides_extremes():
     # Coin sud-ouest (zone de Cotonou)
     marche_sud = Market(6.40, 2.40, "Cotonou")
     assert marche_sud.location == "Cotonou"
+
+
+def test_market_bornes_gps_issues_de_config():
+    """Vérifie que les constantes GPS du module market correspondent à CONFIG."""
+    from kadi.config import CONFIG
+    from kadi.market import _LAT_MIN, _LAT_MAX, _LON_MIN, _LON_MAX
+
+    # Lecture de la source de vérité
+    bbox = CONFIG.get("weather", {}).get("gps_validation_bbox", {})
+
+    # Les constantes du module doivent refléter exactement la configuration
+    assert _LAT_MIN == bbox.get("min_lat"), (
+        f"_LAT_MIN ({_LAT_MIN}) ne correspond pas à config min_lat ({bbox.get('min_lat')})"
+    )
+    assert _LAT_MAX == bbox.get("max_lat"), (
+        f"_LAT_MAX ({_LAT_MAX}) ne correspond pas à config max_lat ({bbox.get('max_lat')})"
+    )
+    assert _LON_MIN == bbox.get("min_lon"), (
+        f"_LON_MIN ({_LON_MIN}) ne correspond pas à config min_lon ({bbox.get('min_lon')})"
+    )
+    assert _LON_MAX == bbox.get("max_lon"), (
+        f"_LON_MAX ({_LON_MAX}) ne correspond pas à config max_lon ({bbox.get('max_lon')})"
+    )
 
 
 # --- Tests de normalisation des cultures (_normalization.py) ---
