@@ -109,6 +109,8 @@ dependencies = [
 dev = [
     # Exécution des tests unitaires
     "pytest>=7.0",
+    # Rapport de couverture de code (utilisé dans la CI et en local)
+    "pytest-cov>=4.0",
     # Mocking des appels HTTP dans les tests
     "pytest-mock>=3.7",
     "responses>=0.21",
