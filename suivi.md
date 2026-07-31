@@ -133,11 +133,14 @@ _LON_MAX = _bbox.get("max_lon", 4.0)
 
 **Problème 9** | Module `kadi.kidas` | Sévérité : **Haute**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Dans `cleaner.py` lignes 362-363, `nb_corrigees` est calculé mais jamais utilisé. Le rapport accumule `nb_avant` au lieu du nombre réel de dates converties.
+Dans `cleaner.py`, la variable `nb_corrigees` était calculée mais jamais utilisée.
+Le compteur accumulait `nb_avant` (total des valeurs non-null avant parsing) au
+lieu du nombre réel de conversions réussies. Si une colonne avait 100 valeurs et
+80 étaient parsées avec succès, le rapport affichait 100 au lieu de 80.
 
-**Action :**
+**Action réalisée :**
 ```python
 # Avant (incorrect)
 nb_corrigees = int(nb_avant - (nb_avant - nb_apres))  # toujours = nb_apres
@@ -147,7 +150,10 @@ nb_corrigees = int(nb_apres)
 nb_dates_corrigees += nb_corrigees
 ```
 
-**Fichier :** `kadi/kidas/cleaner.py` (lignes ~362-363)
+**Fichiers modifiés :**
+- `kadi/kidas/cleaner.py` (lignes ~360-363)
+- `tests/test_kidas/test_processing.py` (ajout de `test_fix_dates_compteur_toutes_converties`,
+  `test_fix_dates_compteur_conversions_partielles`, `test_fix_dates_colonne_inexistante_ne_plante_pas`)
 
 ---
 
@@ -155,20 +161,25 @@ nb_dates_corrigees += nb_corrigees
 
 **Problème 5** | Module `kadi.market` | Sévérité : **Moyenne**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Dans `data_ingestion.py`, la méthode retourne `7.9` en dur sans aucun calcul. Elle est exposée publiquement sans utilité concrète.
+La méthode retournait `7.9` en dur sans aucun calcul. Elle a été remplacée par
+une `NotImplementedError` explicite avec un message orientant vers la future
+source FEWSNET. La docstring a été mise à jour en cohérence.
 
-**Action :** lever une `NotImplementedError` explicite :
+**Action réalisée :**
 ```python
-def get_market_functionality_index(self, market_id: str) -> float:
-    raise NotImplementedError(
-        "get_market_functionality_index() n'est pas encore implémentée. "
-        "Elle sera disponible après intégration de la source FEWSNET."
-    )
+raise NotImplementedError(
+    "get_market_functionality_index() n'est pas encore implémentée. "
+    "Elle sera disponible après intégration de la source FEWSNET."
+)
 ```
 
-**Fichier :** `kadi/market/data_ingestion.py` (ligne ~615)
+**Fichiers modifiés :**
+- `kadi/market/data_ingestion.py` (lignes ~601-625)
+- `tests/test_market/test_market_components.py` (ajout de
+  `test_get_market_functionality_index_leve_not_implemented`,
+  `test_get_market_functionality_index_message_fewsnet`)
 
 ---
 
@@ -176,20 +187,15 @@ def get_market_functionality_index(self, market_id: str) -> float:
 
 **Problème 16** | CI / GitHub Actions | Sévérité : **Moyenne**
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Aucun rapport de couverture n'est généré dans le workflow CI. Impossible de détecter une régression de couverture.
+`pytest-cov>=4.0` a été ajouté dans les dépendances `[dev]` de `pyproject.toml`.
+Le workflow CI a été mis à jour pour générer un rapport de couverture avec un
+seuil minimal de 70 %, et un rapport XML pour Codecov (optionnel, Python 3.11 uniquement).
 
-**Action :** ajouter dans `.github/workflows/` :
-```yaml
-- name: Lancer les tests avec couverture
-  run: |
-    pytest tests/ --cov=kadi --cov-report=xml --cov-report=term-missing
-```
-
-Seuil minimal recommandé : `--cov-fail-under=70`
-
-**Fichier :** `.github/workflows/*.yml`
+**Fichiers modifiés :**
+- `pyproject.toml` (ajout de `pytest-cov>=4.0` dans `[dev]`)
+- `.github/workflows/tests.yml` (étape 4 mise à jour, étape 5 Codecov ajoutée)
 
 ---
 
@@ -227,9 +233,9 @@ Dans la v1.1.0, l'API WFP DataBridges sera intégrée directement. L'utilisateur
 | 13 | `config` | Haute | `requirements.txt` désynchronisé avec `pyproject.toml` | `[x]` |
 | 3 | `weather` | Haute | SPI approximé par Z-score au lieu d'une loi Gamma | `[x]` |
 | 4 | `market` | Haute | Bornes GPS dupliquées en dur au lieu de lire `CONFIG` | `[x]` |
-| 9 | `kidas` | Haute | `nb_dates_corrigees` calculé incorrectement dans `fix_dates()` | `[ ]` |
-| 5 | `market` | Moyenne | `get_market_functionality_index()` retourne toujours 7.9 | `[ ]` |
-| 16 | CI | Moyenne | Pas de rapport `pytest-cov` dans la CI | `[ ]` |
+| 9 | `kidas` | Haute | `nb_dates_corrigees` calculé incorrectement dans `fix_dates()` | `[x]` |
+| 5 | `market` | Moyenne | `get_market_functionality_index()` retourne toujours 7.9 | `[x]` |
+| 16 | CI | Moyenne | Pas de rapport `pytest-cov` dans la CI | `[x]` |
 | — | `market` | N/A | Intégration API WFP DataBridges (v1.1.0) | `[ ]` |
 | 2 | `weather` | Faible | Alias `temperature_avg/mean` dupliqué | `[~]` |
 | 10 | `kidas` | Faible | Clé de cache non sécurisée dans `execute()` | `[~]` |
