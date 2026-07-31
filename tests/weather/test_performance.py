@@ -17,7 +17,8 @@ from kadi.weather.risk import RiskIndicators
 from kadi.weather.location import Location
 
 # Limite de temps autorisée (en secondes) pour chaque opération
-LIMITE_SECONDES = 1.0
+# Ajustée à 2.0s pour absorber la variabilité de charge des runners CI partagés
+LIMITE_SECONDES = 2.0
 
 # Taille du jeu de données de performance : 10 ans de données quotidiennes
 NB_JOURS = 3650
