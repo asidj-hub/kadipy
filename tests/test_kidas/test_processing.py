@@ -80,6 +80,47 @@ class TestDataCleaner:
         df = cleaner.fix_dates(columns=["date_recolte"])
         assert pd.api.types.is_datetime64_any_dtype(df["date_recolte"])
 
+    def test_fix_dates_compteur_toutes_converties(self):
+        """Vérifie que dates_corrigees == nb_lignes quand toutes les dates sont valides."""
+        # 5 dates toutes parsables
+        df = pd.DataFrame({
+            "date_recolte": [
+                "2024-01-01", "2024-02-15", "2024-03-10",
+                "2024-04-01", "2024-05-05",
+            ]
+        })
+        cleaner = DataCleaner(df)
+        cleaner.fix_dates(columns=["date_recolte"])
+        rapport = cleaner.get_cleaning_report()
+        # Le compteur doit correspondre aux conversions réussies, pas au total initial
+        assert rapport["dates_corrigees"] == 5
+
+    def test_fix_dates_compteur_conversions_partielles(self):
+        """Vérifie que dates_corrigees reflète le nombre réel de dates converties."""
+        # 10 valeurs : 8 parsables, 2 invalides
+        df = pd.DataFrame({
+            "date_recolte": [
+                "2024-01-01", "2024-02-15", "invalide",
+                "2024-03-10", "pas-une-date", "2024-04-01",
+                "2024-05-05", "2024-06-20", "2024-07-07",
+                "2024-08-08",
+            ]
+        })
+        cleaner = DataCleaner(df)
+        cleaner.fix_dates(columns=["date_recolte"])
+        rapport = cleaner.get_cleaning_report()
+        # Le bug précédent retournait 10 (nb_avant) ; la correction retourne 8 (nb_apres)
+        assert rapport["dates_corrigees"] == 8
+
+    def test_fix_dates_colonne_inexistante_ne_plante_pas(self):
+        """Vérifie que fix_dates() ne plante pas et laisse le compteur à 0 si la colonne est absente."""
+        df = pd.DataFrame({"autre_colonne": [1, 2, 3]})
+        cleaner = DataCleaner(df)
+        # Ne doit pas lever d'exception
+        cleaner.fix_dates(columns=["colonne_inexistante"])
+        rapport = cleaner.get_cleaning_report()
+        assert rapport["dates_corrigees"] == 0
+
     def test_standardize_text_minuscules(self, sample_df):
         """Vérifie que standardize_text() convertit en minuscules."""
         cleaner = DataCleaner(sample_df)
