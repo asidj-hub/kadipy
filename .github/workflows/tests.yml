@@ -44,6 +44,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      # Étape 4 : Exécution de la suite de tests avec pytest
-      - name: Exécution des tests avec pytest
-        run: pytest tests/ -v --tb=short
+      # Étape 4 : Exécution des tests avec rapport de couverture
+      # --cov=kadi         : mesure la couverture sur le package principal
+      # --cov-report=xml   : génère coverage.xml pour Codecov ou autres outils CI
+      # --cov-report=term-missing : affiche les lignes non couvertes dans les logs
+      # --cov-fail-under=70 : fait échouer le workflow si la couverture passe sous 70 %
+      - name: Exécution des tests avec couverture
+        run: |
+          pytest tests/ -v --tb=short \
+            --cov=kadi \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70
+
+      # Étape 5 : Envoi du rapport de couverture vers Codecov (optionnel)
+      # Exécutée uniquement sur Python 3.11 pour éviter les soumissions en double
+      # depuis la matrice multi-versions. fail_ci_if_error=false : une défaillance
+      # de Codecov ne bloque pas le workflow principal.
+      - name: Envoi du rapport de couverture
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
