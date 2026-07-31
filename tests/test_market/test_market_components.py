@@ -1121,3 +1121,23 @@ def test_facade_market_seasonality():
 
     # Le dictionnaire des indices doit contenir les 12 mois
     assert set(res["indices"].keys()) == set(range(1, 13))
+
+
+# ==========================================================================
+# Tests P7 — get_market_functionality_index() doit lever NotImplementedError
+# ==========================================================================
+
+def test_get_market_functionality_index_leve_not_implemented():
+    """Vérifie que get_market_functionality_index() lève NotImplementedError en v1.1.0."""
+    # Le mode miroir évite tout appel réseau pendant ce test
+    client = WFPDataBridgesClient(use_local_mirror=True)
+    with pytest.raises(NotImplementedError):
+        client.get_market_functionality_index("cotonou")
+
+
+def test_get_market_functionality_index_message_fewsnet():
+    """Vérifie que le message de NotImplementedError mentionne FEWSNET."""
+    client = WFPDataBridgesClient(use_local_mirror=True)
+    with pytest.raises(NotImplementedError, match="FEWSNET"):
+        client.get_market_functionality_index("parakou")
+
