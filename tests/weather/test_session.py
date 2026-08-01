@@ -21,7 +21,9 @@ def test_historical(mock_historical, session):
     mock_historical.return_value = pd.DataFrame({'precipitation': [0]*30})
     res = session.historical(months_back=1)
     assert not res.empty
-    mock_historical.assert_called_once_with(months_back=1)
+    # source=None est transmis par session.historical() (résolution de la valeur par défaut
+    # déléguée à WeatherData.fetch_historical via CONFIG)
+    mock_historical.assert_called_once_with(months_back=1, source=None)
 
 @patch('kadi.weather.phenology.Phenology.onset')
 @patch('kadi.weather.data.WeatherData.fetch_historical')
