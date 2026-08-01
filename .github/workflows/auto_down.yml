@@ -1,0 +1,40 @@
+name: Téléchargement auto de données
+
+on:
+  schedule:
+    - cron: '55 5 * * *' 
+  workflow_dispatch:      # Permet un déclenchement manuel depuis l'interface GitHub[reference:5]
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Récupérer le code du dépôt
+      - name: Checkout du code
+        uses: actions/checkout@v4
+        
+      # 2. Configurer l'environnement Python (si vous utilisez Python)
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      # 3. Installer les dépendances
+      - name: Installer les dépendances
+        run: |
+          pip install requests gzip rioxarray geopandas
+          # pip install -r requirements.txt
+          
+      # 4. Exécuter le script de téléchargement
+      - name: Télécharger les données
+        run: python download_data.py
+          
+      # 5. Committer et pousser les changements dans le dépôt
+      - name: Committer les résultats
+        run: |
+          git config user.name 'GitHub Actions'
+          git config user.email 'actions@github.com'
+          git add data/
+          git diff --staged --quiet || git commit -m "Mise à jour des données $(date -u +'%Y-%m-%d %H:%M')"
+          git push
