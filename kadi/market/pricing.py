@@ -26,7 +26,12 @@ class MarketPricing:
     pour les données de prix de marché agricole au Bénin.
     """
 
-    def __init__(self, wfp_client=None, exchange_client=None):
+    def __init__(
+        self,
+        wfp_client=None,
+        exchange_client=None,
+        simulated: bool = False,
+    ):
         """
         Initialise le module de tarification.
 
@@ -35,9 +40,14 @@ class MarketPricing:
                 pour récupérer les données de prix. Si None, génère des données simulées.
             exchange_client (ExchangeRateClient, optional): Instance d'ExchangeRateClient
                 pour les taux de change dynamiques. Si None, utilise config.EXCHANGE_RATES.
+            simulated (bool, optional): Si True, force le mode simulation pour
+                toutes les opérations de tarification. Défaut : False.
         """
         # Instance du client WFP DataBridges
         self.wfp_client = wfp_client
+
+        # Mode simulation explicite
+        self.simulated = simulated
 
         # Récupération des taux de change dynamiques ou statiques
         if exchange_client is not None:
@@ -54,26 +64,54 @@ class MarketPricing:
                 "ExchangeRateClient non fourni. Taux de repli de config.py utilisés."
             )
 
-    def fetch_prices(self, crop: str, market: str, days_back: int = 365) -> pd.DataFrame:
+    def fetch_prices(
+        self,
+        crop: str,
+        market: str,
+        days_back: int = 365,
+        simulated: bool = None,
+    ) -> pd.DataFrame:
         """
         Récupère les prix historiques pour une culture et un marché donnés.
 
-        Le DataFrame retourné contient toujours une colonne ``is_simulated``
-        indiquant si les données proviennent d'une source réelle (False)
-        ou d'une simulation de secours (True).
+        Le paramètre ``simulated`` permet de choisir explicitement entre
+        les données réelles de l'API HAPI HumData (PAM) et des données
+        générées mathématiquement à des fins de test ou de démonstration.
+
+        En mode simulé, aucun appel réseau n'est effectué. Les données générées
+        suivent une distribution normale centrée sur 300 XOF/kg (ecart-type 20)
+        et sont clairement marquées ``is_simulated=True`` avec un score de
+        confiance de 0.1 pour signaler leur origine fictive.
 
         Args:
             crop (str): Code de la culture (ex: 'maize', 'rice').
             market (str): Nom normalisé du marché (ex: 'cotonou').
             days_back (int, optional): Nombre de jours d'historique. Défaut à 365.
+            simulated (bool, optional): Surcharge le mode simulation.
+                Si None, hérite de self.simulated. Défaut : None.
 
         Returns:
-            pd.DataFrame: DataFrame avec 'date', 'price', 'unit', 'is_simulated'.
+            pd.DataFrame: DataFrame avec les colonnes 'date', 'price', 'unit',
+                'is_simulated', 'source', 'fetched_at', 'confidence_score'.
         """
+        # Résolution du mode simulation : paramètre local ou instance
+        mode_simule = self.simulated if simulated is None else simulated
+
         # Calcul de la plage de dates pour la requête API
         end_date = datetime.date.today()
         start_date = end_date - datetime.timedelta(days=days_back)
         time_range = (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+
+        # --- Mode simulation explicitement demandé par l'utilisateur ---
+        if mode_simule:
+            logger.info(
+                f"Mode simulation activé pour '{crop}' / '{market}'. "
+                "Aucune requête réseau ne sera effectuée. "
+                "Les données retournées sont fictives (is_simulated=True, "
+                "confidence_score=0.1). Ne pas utiliser pour des décisions "
+                "commerciales réelles."
+            )
+            return self._generer_donnees_simulees(crop, market, days_back, end_date)
 
         if self.wfp_client is not None:
             # Appel au client WFP (qui gère lui-même le retry, le cache et le fallback)
@@ -81,26 +119,60 @@ class MarketPricing:
         else:
             # Pas de client configuré : on génère des données de simulation
             logger.warning(
-                "Aucun client WFP configuré. Données simulées utilisées pour "
-                f"{crop} / {market}."
+                f"Aucun client WFP configuré pour '{crop}' / '{market}'. "
+                "Données simulées utilisées en remplacement "
+                "(is_simulated=True, confidence_score=0.1)."
             )
-            dates = pd.date_range(end=end_date, periods=days_back, freq="D")
-            prix_aleatoires = np.random.normal(loc=300, scale=20, size=days_back)
-            maintenant = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            df_prices = pd.DataFrame(
-                {
-                    "date": dates,
-                    "price": prix_aleatoires,
-                    "unit": "XOF/kg",
-                    # Champs standards attendus par le reste du module
-                    "is_simulated": True,
-                    "source": "simulated",
-                    "fetched_at": maintenant,
-                    "confidence_score": 0.1,
-                }
-            )
+            df_prices = self._generer_donnees_simulees(crop, market, days_back, end_date)
 
         return df_prices
+
+    def _generer_donnees_simulees(
+        self,
+        crop: str,
+        market: str,
+        days_back: int,
+        end_date: datetime.date,
+    ) -> pd.DataFrame:
+        """
+        Génère un DataFrame de prix fictifs par distribution normale.
+
+        Les prix générés oscillent autour de 300 XOF/kg avec un ecart-type
+        de 20 XOF, ce qui est representatif des cereales seches au Benin.
+        Toutes les colonnes de metadonnees sont positionnees pour signaler
+        explicitement l'origine simulee des donnees.
+
+        Args:
+            crop (str): Code de la culture (pour les logs).
+            market (str): Nom du marche (pour les logs).
+            days_back (int): Nombre de jours de données à générer.
+            end_date (datetime.date): Date de fin de la serie.
+
+        Returns:
+            pd.DataFrame: Données simulées avec is_simulated=True.
+        """
+        # Série de dates quotidiennes terminant aujourd'hui
+        dates = pd.date_range(end=end_date, periods=days_back, freq="D")
+
+        # Prix générés par distribution normale centrée sur 300 XOF/kg
+        prix_aleatoires = np.random.normal(loc=300, scale=20, size=days_back)
+        maintenant = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        logger.debug(
+            f"Données simulées générées pour '{crop}' / '{market}' "
+            f"({days_back} observations, moy=300 XOF/kg, ecart-type=20)."
+        )
+
+        return pd.DataFrame({
+            "date": dates,
+            "price": prix_aleatoires,
+            "unit": "XOF/kg",
+            # Marqueurs explicites d'origine simulée
+            "is_simulated": True,
+            "source": "simulated",
+            "fetched_at": maintenant,
+            "confidence_score": 0.1,
+        })
 
     def normalize_units(self, value: float, unit_orig: str, crop: str = None) -> float:
         """
