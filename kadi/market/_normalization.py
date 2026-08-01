@@ -167,15 +167,8 @@ CONTAINER_WEIGHTS_KG = {
     "caisse": 20.0,
 }
 
-# -------------------------------------------------------------------------
-# Taux de conversion de devises (base de référence, mis à jour dans config.py)
-# Ces taux sont des valeurs par défaut. La configuration principale
-# les remplace au besoin.
-# -------------------------------------------------------------------------
-EXCHANGE_RATES_DEFAULT = {
-    "USD_TO_XOF": 620.0,   # 1 USD ≈ 620 XOF (à ajuster régulièrement)
-    "EUR_TO_XOF": 655.957, # 1 EUR = 655.957 XOF (taux fixe UEMOA)
-}
+
+
 
 
 def normalize_crop_name(name: str) -> str:
