@@ -68,6 +68,9 @@ dependencies = [
     # Requêtes HTTP vers les APIs météo (Open-Meteo, CHIRPS, WFP, OSRM)
     "requests>=2.25",
 
+    # Analyse du contenu HTML (scraping des prix des carburants)
+    "beautifulsoup4>=4.11",
+
     # Manipulation de données tabulaires (séries temporelles, jointures)
     "pandas>=1.3",
 
