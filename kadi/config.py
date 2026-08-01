@@ -203,9 +203,30 @@ WFP_VAM_API_URL = os.environ.get(
     "https://hungermap.wfp.org"
 )
 
+# URL de l'API Frankfurter pour les taux de change en temps réel
+# Peut être surchargée par la variable d'environnement FRANKFURTER_API_URL
+FRANKFURTER_API_URL = os.environ.get(
+    "FRANKFURTER_API_URL",
+    "https://api.frankfurter.dev/v2"
+)
 
-# Taux de change par défaut pour les conversions de devises
+# URL de base de l'API HAPI HumData (PAM)
+# Peut être surchargée par la variable d'environnement HAPI_API_URL
+HAPI_API_URL = os.environ.get(
+    "HAPI_API_URL",
+    "https://hapi.humdata.org/api/v2"
+)
+
+# Identifiant applicatif encodé en base64 pour l'API HAPI HumData
+# Doit impérativement être défini dans la variable d'environnement HAPI_APP_IDENTIFIER
+# Aucune valeur par défaut : l'absence de cet identifiant provoque un fallback simulé
+HAPI_APP_IDENTIFIER = os.environ.get("HAPI_APP_IDENTIFIER")
+
+# Taux de change de repli utilisés en mode hors ligne
+# Ces valeurs statiques ne sont lues que si ExchangeRateClient ne peut pas
+# joindre l'API Frankfurter (pas de réseau, timeout, etc.)
+# Format inversé : nombre d'unités XOF pour 1 unité de la devise cible
 EXCHANGE_RATES = {
-    "XOF_USD": 0.0016,  # Mise à jour quotidienne prévue
-    "XOF_EUR": 0.0015,
+    "USD_TO_XOF": 620.0,   # 1 USD ≈ 620 XOF (valeur de repli)
+    "EUR_TO_XOF": 655.957, # 1 EUR = 655.957 XOF (taux fixe UEMOA, valeur de repli)
 }
