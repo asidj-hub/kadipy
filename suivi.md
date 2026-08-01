@@ -203,9 +203,36 @@ seuil minimal de 70 %, et un rapport XML pour Codecov (optionnel, Python 3.11 un
 
 **Nouvelle fonctionnalité** | Module `kadi.market` | Sévérité : N/A
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Résolu**
 
-Dans la v1.1.0, l'API WFP DataBridges sera intégrée directement. L'utilisateur n'aura pas à injecter une clé API personnelle. Le client gérera automatiquement l'accès aux endpoints publics ou via un jeton par défaut embarqué.
+Deux clients API ont été créés et intégrés dans le module `kadi.market` :
+
+**1. `ExchangeRateClient`** — Taux de change dynamiques via Frankfurter (`api.frankfurter.dev`) :
+- L'API est appelée pour les paires XOF/USD et XOF/EUR.
+- Cache mémoire TTL 24h pour éviter les appels redondants.
+- Fallback automatique sur `config.EXCHANGE_RATES` en mode hors ligne.
+- `EXCHANGE_RATES_DEFAULT` supprimé de `_normalization.py` : source unique dans `config.py`.
+
+**2. `WFPDataBridgesClient`** (HAPI HumData) — Prix de marché réels via l'API HAPI :
+- Appelle l'endpoint `food-prices-market-monitor` de l'API HAPI.
+- Identifiant lu exclusivement depuis `HAPI_APP_IDENTIFIER` (variable d'environnement).
+- Pagination automatique, retry avec backoff exponentiel.
+- Normalisation des colonnes HAPI vers le format interne KadiPy.
+- Fallback : données simulées avec `is_simulated=True` si identifiant absent ou réseau indisponible.
+
+Les deux clients sont injectés automatiquement dans `Market` à l'instanciation.
+
+**Fichiers créés :**
+- `kadi/_sources/exchange_client.py` (nouveau)
+- `kadi/_sources/wfp_client.py` (nouveau)
+- `tests/test_market/test_exchange_client.py` (nouveau)
+- `tests/test_market/test_wfp_client.py` (nouveau)
+
+**Fichiers modifiés :**
+- `kadi/config.py` (ajout `FRANKFURTER_API_URL`, `HAPI_API_URL`, `HAPI_APP_IDENTIFIER` ; mise à jour `EXCHANGE_RATES`)
+- `kadi/market/__init__.py` (injection des deux clients, suppression `env_file`)
+- `kadi/market/pricing.py` (ajout `exchange_client`, import depuis `config.py`)
+- `kadi/market/_normalization.py` (suppression `EXCHANGE_RATES_DEFAULT`)
 
 ---
 
@@ -236,7 +263,7 @@ Dans la v1.1.0, l'API WFP DataBridges sera intégrée directement. L'utilisateur
 | 9 | `kidas` | Haute | `nb_dates_corrigees` calculé incorrectement dans `fix_dates()` | `[x]` |
 | 5 | `market` | Moyenne | `get_market_functionality_index()` retourne toujours 7.9 | `[x]` |
 | 16 | CI | Moyenne | Pas de rapport `pytest-cov` dans la CI | `[x]` |
-| — | `market` | N/A | Intégration API WFP DataBridges (v1.1.0) | `[ ]` |
+| — | `market` | N/A | Intégration API WFP DataBridges (v1.1.0) | `[x]` |
 | 2 | `weather` | Faible | Alias `temperature_avg/mean` dupliqué | `[~]` |
 | 10 | `kidas` | Faible | Clé de cache non sécurisée dans `execute()` | `[~]` |
 | 11 | `config` | Faible | `MODELS_DIR` pointe vers un dossier inexistant | `[~]` |
