@@ -121,6 +121,7 @@ class Market:
         lon: float,
         location: str,
         weather_session=None,
+        simulated: bool = False,
     ):
         """
         Initialise le point central du marché pour un lieu au Bénin.
@@ -133,6 +134,12 @@ class Market:
         Configurez les variables d'environnement HAPI_APP_IDENTIFIER, HAPI_API_URL
         et FRANKFURTER_API_URL pour contrôler leur comportement.
 
+        Le paramètre ``simulated`` permet de forcer le mode simulation pour
+        tous les appels de prix (études, tests, démonstrations sans réseau).
+        Quand simulated=True, aucun appel HTTP n'est effectué : les prix
+        retournés sont générés mathématiquement et clairement marqués
+        ``is_simulated=True, confidence_score=0.1``.
+
         Args:
             lat (float): Latitude du lieu (entre 2.5 et 12.5 degrés nord).
             lon (float): Longitude du lieu (entre -1.5 et 4.0 degrés est).
@@ -140,6 +147,10 @@ class Market:
             weather_session (WeatherSession, optional): Session météo
                 (kadi.weather.WeatherSession) pour l'ajustement climatique.
                 Si None, pas d'ajustement météo (comportement V1).
+            simulated (bool, optional): Si True, force le mode simulation pour
+                tous les appels de prix. Aucune requête réseau ne sera effectuée.
+                Utile pour les études, les démonstrations ou les tests hors ligne.
+                Défaut : False (données réelles de l'API HAPI HumData).
 
         Raises:
             TypeError: Si lat, lon ou location ne sont pas du bon type.
@@ -147,10 +158,13 @@ class Market:
                 si le nom du lieu est vide.
 
         Exemples:
+            >>> # Mode données réelles (nécessite HAPI_APP_IDENTIFIER dans l'environnement)
             >>> marche = Market(9.30, 2.08, "Parakou")
-            >>> marche = Market(lat=6.36, lon=2.41, location="Cotonou")
 
-            # Avec intégration météo :
+            >>> # Mode simulation explicite (aucun réseau requis)
+            >>> marche = Market(9.30, 2.08, "Parakou", simulated=True)
+
+            >>> # Avec intégration météo :
             >>> from kadi.weather import WeatherSession
             >>> ws = WeatherSession(latitude=9.30, longitude=2.08, name="Parakou")
             >>> marche = Market(9.30, 2.08, "Parakou", weather_session=ws)
@@ -164,6 +178,20 @@ class Market:
         self.lon = lon
         self.location = location.strip()
 
+        # Choix explicite du mode simulation
+        # Quand True, aucun appel HTTP ne sera effectué pour les prix
+        self.simulated = simulated
+
+        if simulated:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                f"Market('{location}') : mode simulation activé. "
+                "Tous les appels de prix retourneront des données fictives "
+                "(is_simulated=True, confidence_score=0.1). "
+                "Passez simulated=False pour utiliser les données réelles "
+                "de l'API HAPI HumData (PAM)."
+            )
+
         # Session météo optionnelle (Phase 4)
         self.weather_session = weather_session
 
@@ -175,10 +203,11 @@ class Market:
         wfp_client = WFPDataBridgesClient()
 
         # Module de tarification : normalisation, anomalies, agrégation
-        # Les deux clients sont injectés pour des données dynamiques
+        # Les deux clients et le mode simulation sont injectés
         self.pricing = MarketPricing(
             wfp_client=wfp_client,
             exchange_client=exchange_client,
+            simulated=simulated,
         )
 
         # Module de prévision des prix (séries temporelles)
@@ -201,15 +230,20 @@ class Market:
         crop: str,
         days_back: int = 90,
         normalize_to_xof_kg: bool = True,
+        simulated: bool = None,
     ) -> dict:
         """
         API de haut niveau : récupère, normalise et résume les prix d'une culture.
 
         Effectue le pipeline complet en une seule méthode :
-        1. Récupération des prix (cache SQLite ou API WFP)
+        1. Récupération des prix (API HAPI HumData ou simulation)
         2. Normalisation vers XOF/kg
         3. Détection des anomalies
         4. Calcul des statistiques descriptives
+
+        Le paramètre ``simulated`` de cette méthode surcharge le réglage
+        global de l'instance (défini à l'initialisation de Market).
+        Cela permet d'alterner les modes au sein de la même instance.
 
         Args:
             crop (str): Code de la culture (ex: 'maize', 'rice', 'cowpea').
@@ -217,6 +251,8 @@ class Market:
                 Défaut : 90 jours.
             normalize_to_xof_kg (bool, optional): Si True, normalise les prix
                 vers XOF/kg. Défaut : True.
+            simulated (bool, optional): Surcharge le mode simulation de l'instance.
+                Si None, hérite de self.simulated. Défaut : None.
 
         Returns:
             dict: Dictionnaire contenant :
@@ -233,8 +269,13 @@ class Market:
                 - 'source'          : source des données
                 - 'donnees'         : DataFrame complet avec toutes les colonnes
         """
-        # Récupération des données via le module pricing (qui gère cache + API)
-        df = self.pricing.fetch_prices(crop, self.location, days_back=days_back)
+        # Résolution du mode simulation : paramètre local ou héritage de l'instance
+        mode_simule = self.simulated if simulated is None else simulated
+
+        # Récupération des données via le module pricing
+        df = self.pricing.fetch_prices(
+            crop, self.location, days_back=days_back, simulated=mode_simule
+        )
 
         if df.empty:
             return {
@@ -303,15 +344,18 @@ class Market:
         days_ahead: int = 7,
         confidence_interval: float = 0.9,
         days_back: int = 365,
+        simulated: bool = None,
     ) -> dict:
         """
         API de haut niveau : prédit le prix futur d'une culture sur ce marché.
 
         Cette méthode orchestre le pipeline complet en un seul appel :
-        1. Récupération de l'historique de prix (cache SQLite ou API WFP)
+        1. Récupération de l'historique de prix (API HAPI HumData ou simulation)
         2. Normalisation vers XOF/kg
         3. Prévision par régression linéaire avec features saisonnières
         4. Sauvegarde de la prévision dans la table SQLite price_predictions
+
+        Le paramètre ``simulated`` surcharge le réglage global de l'instance.
 
         Args:
             crop (str): Code de la culture (ex: 'maize', 'rice', 'cowpea').
@@ -321,6 +365,8 @@ class Market:
                 l'intervalle de prévision (0.9 ou 0.95). Défaut : 0.9.
             days_back (int, optional): Nombre de jours d'historique à utiliser
                 pour entraîner le modèle. Défaut : 365 jours.
+            simulated (bool, optional): Surcharge le mode simulation de l'instance.
+                Si None, hérite de self.simulated. Défaut : None.
 
         Returns:
             dict: Dictionnaire contenant :
@@ -337,9 +383,12 @@ class Market:
                 - 'nb_history_pts'   : nombre de points d'historique utilisés
                 - 'days_ahead'       : horizon de prévision utilisé
         """
+        # Résolution du mode simulation : paramètre local ou héritage de l'instance
+        mode_simule = self.simulated if simulated is None else simulated
+
         # --- Étape 1 : récupération de l'historique de prix ---
         df_historique = self.pricing.fetch_prices(
-            crop, self.location, days_back=days_back
+            crop, self.location, days_back=days_back, simulated=mode_simule
         )
 
         # Normalisation vers XOF/kg si les données sont disponibles
@@ -387,6 +436,7 @@ class Market:
         self,
         crop: str,
         days_back: int = 730,
+        simulated: bool = None,
     ) -> dict:
         """
         Calcule l'indice saisonnier mensuel des prix d'une culture sur ce marché.
@@ -394,6 +444,8 @@ class Market:
         Cette méthode de haut niveau orchestre deux étapes :
         1. Récupération de l'historique de prix sur la période demandée
         2. Calcul des 12 indices saisonniers par la méthode des ratios
+
+        Le paramètre ``simulated`` surcharge le réglage global de l'instance.
 
         Un historique d'au moins 12 mois est recommandé pour des résultats
         fiables. La valeur par défaut de ``days_back`` (730 jours, soit 2 ans)
@@ -404,6 +456,8 @@ class Market:
             days_back (int, optional): Nombre de jours d'historique à
                 récupérer pour le calcul. Défaut : 730 (2 ans).
                 Utiliser 365 si seule la dernière année est pertinente.
+            simulated (bool, optional): Surcharge le mode simulation de l'instance.
+                Si None, hérite de self.simulated. Défaut : None.
 
         Returns:
             dict: Résultat de ``MarketPricing.seasonality()``, contenant :
@@ -422,9 +476,12 @@ class Market:
                 - ``is_simulated`` (bool) : True si les données sont simulées.
                 - ``message`` (str | None) : avertissement si données insuffisantes.
         """
+        # Résolution du mode simulation : paramètre local ou héritage de l'instance
+        mode_simule = self.simulated if simulated is None else simulated
+
         # --- Étape 1 : récupération de l'historique de prix ---
         df_historique = self.pricing.fetch_prices(
-            crop, self.location, days_back=days_back
+            crop, self.location, days_back=days_back, simulated=mode_simule
         )
 
         # --- Étape 2 : délégation du calcul au module pricing ---
