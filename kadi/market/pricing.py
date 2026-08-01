@@ -9,14 +9,15 @@ import datetime
 import logging
 
 from kadi.market._normalization import (
-    EXCHANGE_RATES_DEFAULT,
     get_container_weight_kg,
 )
+from kadi.config import EXCHANGE_RATES as _EXCHANGE_RATES_FALLBACK
 
 logger = logging.getLogger(__name__)
 
-# Taux de change par défaut (remplacés par config.EXCHANGE_RATES si disponibles)
-_EXCHANGE_RATES = EXCHANGE_RATES_DEFAULT
+# Taux de change initiaux : lus depuis config.py (fallback offline)
+# Ils seront remplacés dynamiquement par ExchangeRateClient si fourni
+_EXCHANGE_RATES = dict(_EXCHANGE_RATES_FALLBACK)
 
 
 class MarketPricing:
@@ -25,16 +26,33 @@ class MarketPricing:
     pour les données de prix de marché agricole au Bénin.
     """
 
-    def __init__(self, wfp_client=None):
+    def __init__(self, wfp_client=None, exchange_client=None):
         """
         Initialise le module de tarification.
 
         Args:
-            wfp_client (WFPDataBridgesClient, optional): Instance de WFPDataBridgesClient pour récupérer les données.
-                Si None, le module génère des données de simulation en fallback.
+            wfp_client (WFPDataBridgesClient, optional): Instance de WFPDataBridgesClient
+                pour récupérer les données de prix. Si None, génère des données simulées.
+            exchange_client (ExchangeRateClient, optional): Instance d'ExchangeRateClient
+                pour les taux de change dynamiques. Si None, utilise config.EXCHANGE_RATES.
         """
         # Instance du client WFP DataBridges
         self.wfp_client = wfp_client
+
+        # Récupération des taux de change dynamiques ou statiques
+        if exchange_client is not None:
+            # Le client retourne toujours un dictionnaire valide (fallback intégré)
+            self._exchange_rates = exchange_client.get_rates()
+            logger.debug(
+                f"Taux de change chargés depuis ExchangeRateClient : "
+                f"{self._exchange_rates}"
+            )
+        else:
+            # Pas de client : on utilise les taux statiques de config.py
+            self._exchange_rates = dict(_EXCHANGE_RATES_FALLBACK)
+            logger.debug(
+                "ExchangeRateClient non fourni. Taux de repli de config.py utilisés."
+            )
 
     def fetch_prices(self, crop: str, market: str, days_back: int = 365) -> pd.DataFrame:
         """
@@ -122,13 +140,13 @@ class MarketPricing:
 
         # --- Conversion des devises étrangères ---
         if unite.startswith("usd"):
-            # USD vers XOF
-            taux = _EXCHANGE_RATES.get("USD_TO_XOF", 620.0)
+            # USD vers XOF : lecture des taux de l'instance
+            taux = self._exchange_rates.get("USD_TO_XOF", _EXCHANGE_RATES_FALLBACK["USD_TO_XOF"])
             return valeur * taux
 
         if unite.startswith("eur"):
-            # EUR vers XOF (taux fixe UEMOA)
-            taux = _EXCHANGE_RATES.get("EUR_TO_XOF", 655.957)
+            # EUR vers XOF (taux fixe UEMOA ou taux dynamique)
+            taux = self._exchange_rates.get("EUR_TO_XOF", _EXCHANGE_RATES_FALLBACK["EUR_TO_XOF"])
             return valeur * taux
 
         # --- Conversion des contenants locaux ---
