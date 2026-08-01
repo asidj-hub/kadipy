@@ -220,7 +220,7 @@ HAPI_API_URL = os.environ.get(
 # Identifiant applicatif encodé en base64 pour l'API HAPI HumData
 # Doit impérativement être défini dans la variable d'environnement HAPI_APP_IDENTIFIER
 # Aucune valeur par défaut : l'absence de cet identifiant provoque un fallback simulé
-HAPI_APP_IDENTIFIER = os.environ.get("HAPI_APP_IDENTIFIER")
+HAPI_APP_IDENTIFIER = os.environ.get("HAPI_APP_IDENTIFIER", "a2FkaXB5OmRlbHNkZW5sYS5kZXZAZ21haWwuY29t")
 
 # Taux de change de repli utilisés en mode hors ligne
 # Ces valeurs statiques ne sont lues que si ExchangeRateClient ne peut pas
