@@ -69,6 +69,35 @@ CONFIG = {
             "min_lon": -1.5,
             "max_lon": 4.0,
         },
+
+        # ---------------------------------------------------------
+        # Paramètres de la source de données CHIRPS
+        # (Climate Hazards Group InfraRed Precipitation with Stations)
+        # Les rasters utilisés proviennent du sous-dossier africa_daily
+        # à la résolution de 0.05° (environ 5 km).
+        # ---------------------------------------------------------
+        "chirps": {
+            # Source de précipitation par défaut pour fetch_historical().
+            # Valeurs acceptées : 'chirps', 'openmeteo', 'both'
+            # 'both' : CHIRPS pour l'historique long, Open-Meteo pour les données récentes.
+            "source_default": "both",
+
+            # Dossier de stockage local des rasters GeoTIFF découpés sur la
+            # zone d'étude (synchronisé avec gps_validation_bbox ci-dessus).
+            # Les rasters sont organisés par année : <raster_cache_dir>/<YYYY>/
+            "raster_cache_dir": str(Path.home() / ".kadi" / "chirps"),
+
+            # Timeout en secondes pour le téléchargement d'un raster journalier.
+            # Les fichiers africa_daily pèsent environ 1-3 Mo.
+            "http_timeout_sec": 30,
+
+            # Délai de disponibilité des données CHIRPS finales.
+            # Les données d'un mois M sont disponibles vers le 15 du mois M+1.
+            # Exemple : les données de juillet sont disponibles le 15 août.
+            # Cette valeur (en jours) est utilisée pour calculer la date
+            # limite au-delà de laquelle CHIRPS n'est pas encore disponible.
+            "availability_lag_days_after_month_end": 15,
+        },
     },
 
     # ---------------------------------------------------------
@@ -196,6 +225,15 @@ CONFIG = {
 OPENMETEO_API_URL = os.environ.get(
     "OPENMETEO_API_URL",
     "https://api.open-meteo.com/v1"
+)
+
+# URL de base du serveur CHIRPS du Climate Hazards Center (CHC) de l'UC Santa Barbara.
+# On utilise le sous-dossier africa_daily (résolution 0.05°, couverture Afrique)
+# plutôt que global_daily pour des fichiers plus légers, adaptés au contexte Bénin.
+# Peut être surchargée par la variable d'environnement CHIRPS_BASE_URL.
+CHIRPS_BASE_URL = os.environ.get(
+    "CHIRPS_BASE_URL",
+    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05"
 )
 
 WFP_VAM_API_URL = os.environ.get(
