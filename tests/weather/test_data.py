@@ -89,7 +89,8 @@ def test_historical_retourne_donnees(mock_cache, mock_fetch, mock_save, location
 
     assert not result.empty
     assert len(result) == 30
-    mock_fetch.assert_called_once_with(days=30)
+    # Le paramètre source='both' est la valeur par défaut depuis l'intégration CHIRPS
+    mock_fetch.assert_called_once_with(days=30, source='both')
 
 
 # ---------------------------------------------------------------------------
