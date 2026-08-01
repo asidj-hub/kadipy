@@ -16,7 +16,10 @@ from .pricing import MarketPricing
 from .forecasting import MarketForecasting
 from .logistics import MarketLogistics
 from .decision_support import DecisionSupport
-from .data_ingestion import WFPDataBridgesClient
+
+# Nouveaux clients API réels (remplacement du stub data_ingestion)
+from kadi._sources.wfp_client import WFPDataBridgesClient
+from kadi._sources.exchange_client import ExchangeRateClient
 
 from kadi.config import CONFIG
 
@@ -117,7 +120,6 @@ class Market:
         lat: float,
         lon: float,
         location: str,
-        env_file: str = ".env",
         weather_session=None,
     ):
         """
@@ -127,12 +129,14 @@ class Market:
         l'ajustement climatique dans la logistique (gamma_route dynamique,
         perte de qualité variable) et l'aide à la décision.
 
+        Les clients API (WFP HAPI, Frankfurter) sont instanciés automatiquement.
+        Configurez les variables d'environnement HAPI_APP_IDENTIFIER, HAPI_API_URL
+        et FRANKFURTER_API_URL pour contrôler leur comportement.
+
         Args:
-            lat (float): Latitude du lieu (entre 6.0 et 12.5 degrés nord).
-            lon (float): Longitude du lieu (entre 0.5 et 3.9 degrés est).
+            lat (float): Latitude du lieu (entre 2.5 et 12.5 degrés nord).
+            lon (float): Longitude du lieu (entre -1.5 et 4.0 degrés est).
             location (str): Nom du lieu (ex: 'Abomey', 'Parakou'). Non vide.
-            env_file (str, optional): Chemin vers le fichier .env contenant
-                les variables d'environnement (ex: WFP_API_Token). Défaut : '.env'.
             weather_session (WeatherSession, optional): Session météo
                 (kadi.weather.WeatherSession) pour l'ajustement climatique.
                 Si None, pas d'ajustement météo (comportement V1).
@@ -163,11 +167,19 @@ class Market:
         # Session météo optionnelle (Phase 4)
         self.weather_session = weather_session
 
-        # Client d'ingestion des données de marché (WFP DataBridges + cache SQLite)
-        self.data_client = WFPDataBridgesClient(env_file=env_file)
+        # Client de taux de change dynamiques (API Frankfurter)
+        # Partagé avec MarketPricing pour les conversions USD/EUR -> XOF
+        exchange_client = ExchangeRateClient()
+
+        # Client d'ingestion des données de marché (API HAPI HumData / PAM)
+        wfp_client = WFPDataBridgesClient()
 
         # Module de tarification : normalisation, anomalies, agrégation
-        self.pricing = MarketPricing(wfp_client=self.data_client)
+        # Les deux clients sont injectés pour des données dynamiques
+        self.pricing = MarketPricing(
+            wfp_client=wfp_client,
+            exchange_client=exchange_client,
+        )
 
         # Module de prévision des prix (séries temporelles)
         self.forecasting = MarketForecasting()
@@ -182,6 +194,7 @@ class Market:
             logistics_module=self.logistics,
             pricing_module=self.pricing,  # Injection des vrais prix
         )
+
 
     def price_crop(
         self,
