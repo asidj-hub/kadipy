@@ -93,21 +93,30 @@ class WeatherSession:
             'last_updated': pd.Timestamp.now().isoformat()
         }
 
-    def historical(self, metric: str = 'all', months_back: int = 120) -> pd.DataFrame:
+    def historical(self, metric: str = 'all', months_back: int = 120, source: str = None) -> pd.DataFrame:
         """
-        Retourne les séries historiques.
+        Retourne les séries historiques météorologiques.
 
-        :param metric: Filtre de colonne ('temperature', 'precipitation', 'humidity', 'all').
-        :param months_back: Nombre de mois d'historique.
-        :return: DataFrame historique.
+        :param metric: Filtre de colonne : 'temperature', 'precipitation',
+            'humidity' ou 'all' (défaut, toutes les colonnes).
+        :param months_back: Nombre de mois d'historique à récupérer.
+        :param source: Source des données de précipitation. Valeurs acceptées :
+            'chirps' (CHIRPS uniquement, repli Open-Meteo si indisponible),
+            'openmeteo' (Open-Meteo uniquement, comportement V1.0),
+            'both' (CHIRPS pour l'historique long, Open-Meteo pour les données
+            récentes non encore publiées par CHIRPS).
+            Si None, utilise la valeur par défaut de CONFIG.
+        :return: DataFrame historique avec DatetimeIndex.
         """
-        df = self.weather_data.fetch_historical(months_back=months_back)
-        
+        # Transmission du paramètre source à la couche de données
+        df = self.weather_data.fetch_historical(months_back=months_back, source=source)
+
+        # Filtre optionnel sur les colonnes si metric est précisé
         if metric != 'all':
             cols = [c for c in df.columns if metric in c]
             if cols:
                 return df[cols]
-                
+
         return df
 
     def growing_degree_days(self, crop: str, start_date: str, end_date: str = None) -> dict:
