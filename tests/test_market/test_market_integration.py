@@ -72,9 +72,13 @@ def marche_parakou() -> Market:
     """
     Retourne une instance Market pour Parakou (centre du Bénin).
 
+    Le mode simulé est activé (simulated=True) pour garantir un comportement
+    hors ligne reproductible, indépendamment des variables d'environnement
+    API configurées sur la machine de test.
+
     Coordonnées réelles : lat=9.337, lon=2.627 - dans la zone Bénin valide.
     """
-    return Market(lat=9.337, lon=2.627, location="Parakou")
+    return Market(lat=9.337, lon=2.627, location="Parakou", simulated=True)
 
 
 # ============================================================
