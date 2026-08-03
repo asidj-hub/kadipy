@@ -236,7 +236,7 @@ Les deux clients sont injectés automatiquement dans `Market` à l'instanciation
 
 ---
 
-## Priorité 2 — Améliorations pour la v1.2.0 ou ultérieure
+## Priorité 2 — Autres améliorations pour la v1.1.0
 
 | # | Problème | Module | Sévérité | Description courte | Statut |
 |---|---------|--------|----------|--------------------|--------|
