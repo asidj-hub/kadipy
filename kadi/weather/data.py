@@ -21,6 +21,41 @@ class WeatherData:
     Gère l'acquisition, le cache SQLite et la normalisation des données météorologiques.
     """
 
+    @staticmethod
+    def _unifier_colonne_temperature(df: pd.DataFrame) -> pd.DataFrame:
+        """Garantit la présence de la colonne temperature_mean dans le DataFrame.
+
+        Centralise la logique d'alias entre temperature_avg (nom SQLite du cache)
+        et temperature_mean (nom utilisé par les algorithmes du module weather).
+        Cette méthode est le point unique de normalisation de cette colonne.
+
+        Ordre de priorité :
+        1. Calcul direct (temperature_min + temperature_max) / 2 si les deux
+           colonnes de base sont disponibles.
+        2. Alias depuis temperature_avg si le calcul est impossible (cas cache
+           sans temperature_min/temperature_max).
+
+        Args:
+            df (pd.DataFrame): DataFrame météo brut ou issu du cache.
+
+        Returns:
+            pd.DataFrame: DataFrame avec temperature_mean garanti si les
+                données sources sont présentes.
+        """
+        # Calcul direct prioritaire : (min + max) / 2
+        if "temperature_min" in df.columns and "temperature_max" in df.columns:
+            tmean_calc = (df["temperature_min"] + df["temperature_max"]) / 2.0
+            if "temperature_mean" not in df.columns:
+                # Création de la colonne depuis les bornes thermiques
+                df["temperature_mean"] = tmean_calc
+            else:
+                # Comblement des NaN uniquement, sans écraser les valeurs existantes
+                df["temperature_mean"] = df["temperature_mean"].fillna(tmean_calc)
+        elif "temperature_avg" in df.columns and "temperature_mean" not in df.columns:
+            # Alias de secours : temperature_avg provient du cache SQLite
+            df["temperature_mean"] = df["temperature_avg"]
+        return df
+
     def __init__(self, location: Location, cache_dir: str = None):
         """
         Initialise le gestionnaire de données pour une localisation donnée.
@@ -140,11 +175,10 @@ class WeatherData:
             # Normalisation
             df['date'] = pd.to_datetime(df['date'])
             df.set_index('date', inplace=True)
-            
-            # Assurer la compatibilité avec les algorithmes (temperature_mean)
-            if 'temperature_avg' in df.columns and 'temperature_mean' not in df.columns:
-                df['temperature_mean'] = df['temperature_avg']
-                
+
+            # Garantit la présence de temperature_mean (logique centralisée)
+            df = WeatherData._unifier_colonne_temperature(df)
+
             return df
 
     def _save_to_cache(self, data: pd.DataFrame, data_type: str) -> None:
@@ -386,17 +420,9 @@ class WeatherData:
             # Toute lacune restante en pluie est supposée nulle (pas de pluie = 0 mm)
             df['precipitation'] = df['precipitation'].fillna(0.0)
 
-        # Calcul de temperature_mean si absente ou incomplète
-        if 'temperature_min' in df.columns and 'temperature_max' in df.columns:
-            tmean_calc = (df['temperature_min'] + df['temperature_max']) / 2.0
-            if 'temperature_mean' not in df.columns:
-                df['temperature_mean'] = tmean_calc
-            else:
-                df['temperature_mean'] = df['temperature_mean'].fillna(tmean_calc)
-
-        # Alias pour la compatibilité cache (temperature_avg = temperature_mean)
-        if 'temperature_avg' in df.columns and 'temperature_mean' not in df.columns:
-            df['temperature_mean'] = df['temperature_avg']
+        # Garantit la présence de temperature_mean (logique centralisée
+        # dans _unifier_colonne_temperature pour éviter la duplication).
+        df = WeatherData._unifier_colonne_temperature(df)
 
         return df
 
