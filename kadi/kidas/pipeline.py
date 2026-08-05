@@ -8,6 +8,7 @@ nettoyage, validation et normalisation, puis met les résultats en cache.
 Son API fluide (chainable) permet une utilisation concise et lisible.
 """
 
+import hashlib
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -316,8 +317,13 @@ class DataPipeline:
                 "Aucune source configurée. Appelez load_data() avant execute()."
             )
 
-        # Génération d'une clé de cache basée sur le chemin de la source
-        cle_cache = f"pipeline_{self._source.source_path}"
+        # Génération d'une clé de cache sécurisée : hachage SHA-256 du chemin brut,
+        # tronqué à 16 caractères hexadécimaux pour éviter les collisions et les
+        # erreurs d'encodage avec des chemins contenant des espaces ou des accents.
+        _empreinte = hashlib.sha256(
+            str(self._source.source_path).encode("utf-8")
+        ).hexdigest()[:16]
+        cle_cache = f"pipeline_{_empreinte}"
 
         # Tentative de chargement depuis le cache
         if cache:
