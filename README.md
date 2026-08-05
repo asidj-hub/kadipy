@@ -34,7 +34,11 @@ Nécessite Python 3.9 ou supérieur.
 - Backtesting des prévisions (MAE, RMSE, MAPE, précision directionnelle).
 
 **kadi.weather** : données météorologiques et indicateurs agronomiques.
-- Prévisions et historiques via Open-Meteo et CHIRPS.
+- Prévisions et historiques via Open-Meteo. Données de précipitation haute
+  résolution via CHIRPS (Climate Hazards Group, UC Santa Barbara) en mode
+  hybride automatique : CHIRPS pour l'historique long terme, Open-Meteo pour
+  les données récentes. Repli automatique sur Open-Meteo si CHIRPS est
+  inaccessible (mode hors ligne ou serveur indisponible).
 - Phénologie : détection de la saison des pluies (Sivakumar, Walter-Anyadike), GDD.
 - Hydrologie : évapotranspiration ET0 (Hargreaves-Samani), bilan hydrique FAO-56.
 - Risques climatiques : indice de sécheresse (SPI), probabilité de pluie.
