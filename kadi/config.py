@@ -28,8 +28,11 @@ LOG_DIR.mkdir(exist_ok=True)
 # Chemin vers le fichier de journalisation principal
 LOG_FILE = LOG_DIR / "kadi.log"
 
-# Chemin vers le répertoire contenant les modèles Machine Learning pré-entraînés
-# Ce chemin est relatif à l'emplacement de ce fichier de configuration
+# Chemin vers le répertoire des modèles Machine Learning pré-entraînés.
+# Réservé pour une future intégration ML (non livré en v1.x).
+# Le répertoire kadi/_ml/ n'existe pas encore dans le dépôt.
+# La constante est conservée pour ne pas casser les scripts ou notebooks
+# qui pourraient l'importer depuis kadi.config.
 MODELS_DIR = Path(__file__).parent / "_ml" / "models"
 
 # Dictionnaire de configuration par défaut pour les différents modules
