@@ -182,23 +182,53 @@ class WeatherData:
             return df
 
     def _save_to_cache(self, data: pd.DataFrame, data_type: str) -> None:
+        """Insère ou met à jour les données météo dans le cache SQLite KadiPy.
+
+        Cette méthode parcourt les lignes du DataFrame et les sauvegarde dans la
+        table SQLite weather_data. La vraie source des données (open-meteo, chirps,
+        etc.) est préservée pour chaque ligne au lieu d'être remplacée par une
+        valeur statique.
+
+        Args:
+            data (pd.DataFrame): DataFrame contenant les données météo normalisées.
+            data_type (str): Type de données ("forecast" ou "historical").
+
+        Returns:
+            None
         """
-        Insère ou met à jour les données météo dans le cache SQLite KadiPy.
-        """
+        # Vérification si le DataFrame est vide
         if data.empty:
+            # Fin prématurée si aucune donnée à sauvegarder
             return
-            
+
+        # Ouverture de la connexion à la base de données SQLite KadiPy
         with get_connection() as conn:
+            # Création du curseur d'exécution SQL
             cursor = conn.cursor()
+
+            # Horodatage courant au format ISO
             now = datetime.now().isoformat()
-            
+
+            # Parcours de chaque ligne du DataFrame de données météo
             for date_idx, row in data.iterrows():
+                # Formattage de la date en chaîne YYYY-MM-DD
                 date_str = date_idx.strftime('%Y-%m-%d')
-                
+
+                # Extraction ou calcul de la température moyenne
                 t_avg = row.get('temperature_mean', row.get('temperature_avg', None))
+                # Fallback si t_avg n'est pas directement disponible
                 if t_avg is None:
+                    # Calcul par la moyenne min et max
                     t_avg = (row['temperature_min'] + row['temperature_max']) / 2.0
-                    
+
+                # Extraction de la source réelle de données pour la ligne courante
+                valeur_source = row.get('data_source', None)
+                # Fallback sur une valeur par défaut cohérente si non spécifiée
+                if not valeur_source or pd.isna(valeur_source):
+                    # Par défaut la source est open-meteo
+                    valeur_source = "open-meteo"
+
+                # Exécution de la requête d'insertion avec gestion du conflit d'unicité
                 cursor.execute("""
                     INSERT INTO weather_data (
                         location_id, latitude, longitude, date, hour,
@@ -218,11 +248,27 @@ class WeatherData:
                 """, (
                     self.location.name, self.location.latitude, self.location.longitude, date_str, -1,
                     row['temperature_min'], row['temperature_max'], t_avg,
-                    row['precipitation'], row.get('humidity', 0.0), data_type, "mock_api",
+                    row['precipitation'], row.get('humidity', 0.0), data_type, str(valeur_source),
                     1.0, now
                 ))
-            
-            # Mise à jour des métadonnées du cache
+
+            # Détermination de la source principale pour la table de métadonnées
+            source_principale = "open-meteo"
+            # Inspection des sources uniques présentes dans la colonne data_source
+            if "data_source" in data.columns:
+                # Extraction des valeurs uniques non nuls
+                sources_uniques = [str(s) for s in data["data_source"].dropna().unique() if s]
+                # Si au moins une source est présente
+                if sources_uniques:
+                    # Si plusieurs sources sont mélangées (ex: chirps et open-meteo)
+                    if len(sources_uniques) > 1:
+                        # Concaténation explicite des sources
+                        source_principale = "+".join(sorted(sources_uniques))
+                    else:
+                        # Utilisation de la source unique
+                        source_principale = sources_uniques[0]
+
+            # Mise à jour de la table des métadonnées du cache
             cursor.execute("""
                 INSERT INTO cache_metadata (
                     module_name, table_name, data_source, last_fetch, last_success, last_update
@@ -231,8 +277,9 @@ class WeatherData:
                     last_fetch=excluded.last_fetch,
                     last_success=excluded.last_success,
                     last_update=excluded.last_update
-            """, ("mock_api", now, now, now))
-            
+            """, (source_principale, now, now, now))
+
+            # Validation définitive des transactions en base
             conn.commit()
 
     def _fetch_forecast_data(self, days: int = 7) -> pd.DataFrame:

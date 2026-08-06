@@ -125,7 +125,7 @@ if "data_source" in data.columns:
 # Utiliser source_val à la place de "mock_api" dans l'INSERT SQL
 ```
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Terminé**
 
 ---
 
@@ -375,7 +375,7 @@ partenaire ne peut pas s'organiser autour du planning de KadiPy.
 |---|--------|----------|--------------------|--------|
 | C1 | Infrastructure | Haute | Incrémenter la version à `1.1.0` dans `pyproject.toml` | `[x]` |
 | C2 | Infrastructure | Critique | Retirer l'identifiant personnel de `config.py` | `[x]` |
-| C3 | `weather` | Haute | Corriger `data_source` écrite `"mock_api"` dans le cache SQLite | `[ ]` |
+| C3 | `weather` | Haute | Corriger `data_source` écrite `"mock_api"` dans le cache SQLite | `[x]` |
 | C4 | `market` | Moyenne | Clarifier ou supprimer `data_ingestion.py` | `[ ]` |
 | C5 | `weather` | Haute | Vérifier `soilgrids.py` et documenter son comportement | `[ ]` |
 | C6 | `weather` | Haute | Ajouter des tests pour le connecteur CHIRPS | `[ ]` |
