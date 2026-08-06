@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from kadi.market import Market
-from kadi.market.data_ingestion import WFPDataBridgesClient
+from kadi._sources.wfp_client import WFPDataBridgesClient
 from kadi.market._cache import (
     initialiser_base,
     sauvegarder_prix,
