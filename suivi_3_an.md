@@ -80,7 +80,7 @@ toutes les corrections ont été livrées. Une publication PyPI avec cette versi
 version = "1.1.0"
 ```
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Terminé**
 
 ---
 
@@ -387,7 +387,7 @@ partenaire ne peut pas s'organiser autour du planning de KadiPy.
 
 | # | Module | Sévérité | Description courte | Statut |
 |---|--------|----------|--------------------|--------|
-| C1 | Infrastructure | Haute | Incrémenter la version à `1.1.0` dans `pyproject.toml` | `[ ]` |
+| C1 | Infrastructure | Haute | Incrémenter la version à `1.1.0` dans `pyproject.toml` | `[x]` |
 | C2 | Infrastructure | Critique | Retirer l'identifiant personnel de `config.py` | `[ ]` |
 | C3 | `weather` | Haute | Corriger `data_source` écrite `"mock_api"` dans le cache SQLite | `[ ]` |
 | C4 | `market` | Moyenne | Clarifier ou supprimer `data_ingestion.py` | `[ ]` |
