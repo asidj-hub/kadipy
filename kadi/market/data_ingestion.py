@@ -1,14 +1,20 @@
 """
-Module de connexion aux APIs externes pour l'ingestion de données de marché.
+Module kadi.market.data_ingestion — DÉPRÉCIÉ depuis la v1.1.0.
 
-Inclut le client WFP DataBridges avec :
-- Retry avec backoff exponentiel
-- Cache SQLite (~/kadi/market_prices.db) pour limiter les appels réseau
-- Flag is_simulated transparent dans tous les retours
-- Colonnes enrichies : source, fetched_at, confidence_score
+Ce module a été conservé pour la rétrocompatibilité des tests existants.
+Le client WFPDataBridgesClient et la fonction _get_with_retry ont été
+déplacés dans kadi._sources, qui est la localisation canonique depuis v1.1.0.
 
-Note : sans clé API WFP (WFP_API_Token), le système fonctionne entièrement
-en mode fallback simulé. Toutes les méthodes restent appelables.
+Pour tout nouveau code, utilisez :
+
+    # Client WFP DataBridges
+    from kadi._sources.wfp_client import WFPDataBridgesClient
+
+    # Taux de change dynamiques
+    from kadi._sources.exchange_client import ExchangeRateClient
+
+Ce fichier (data_ingestion.py) sera supprimé dans la v1.2.0.
+Les tests qui l'importent encore directement doivent être mis à jour.
 """
 
 import os
