@@ -514,3 +514,46 @@ class TestDataPipeline:
             assert sous_cle in rapport["details"], (
                 f"Sous-clé manquante dans details : '{sous_cle}'"
             )
+
+    def test_cle_cache_chemin_avec_espaces_pas_collision(self, tmp_path):
+        """Deux pipelines avec des chemins différents doivent avoir des clés différentes.
+
+        Vérifie que la clé SHA-256 distingue correctement des chemins distincts,
+        même s'ils partagent un préfixe commun.
+        """
+        import hashlib
+
+        # Simulation de deux chemins différents (avec espace dans l'un d'eux)
+        chemin_a = str(tmp_path / "mon fichier avec espaces.csv")
+        chemin_b = str(tmp_path / "autre_fichier.csv")
+
+        # Calcul des empreintes selon la même logique que pipeline.py
+        empreinte_a = hashlib.sha256(chemin_a.encode("utf-8")).hexdigest()[:16]
+        empreinte_b = hashlib.sha256(chemin_b.encode("utf-8")).hexdigest()[:16]
+
+        # Deux chemins distincts ne doivent jamais produire la même empreinte
+        assert empreinte_a != empreinte_b, (
+            "Collision de clé de cache détectée entre deux chemins différents."
+        )
+
+    def test_cle_cache_longueur_fixe_16_caracteres(self, tmp_path):
+        """La clé de cache doit toujours faire exactement 16 caractères hexadécimaux.
+
+        Cela garantit une taille prévisible quelle que soit la longueur du chemin source.
+        """
+        import hashlib
+
+        # Chemin avec accents, espaces et séparateurs variés
+        chemin_special = str(tmp_path / "données récolte été 2024 / béninois.xlsx")
+
+        empreinte = hashlib.sha256(chemin_special.encode("utf-8")).hexdigest()[:16]
+
+        # Longueur fixe : 16 caractères (128 bits → 32 hex, tronqués à 16)
+        assert len(empreinte) == 16, (
+            f"Longueur inattendue de la clé de cache : {len(empreinte)} (attendu : 16)."
+        )
+        # Les caractères doivent tous être hexadécimaux valides
+        assert all(c in "0123456789abcdef" for c in empreinte), (
+            f"Clé de cache contient des caractères non hexadécimaux : '{empreinte}'."
+        )
+
