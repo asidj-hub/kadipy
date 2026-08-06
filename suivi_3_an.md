@@ -150,26 +150,47 @@ n'est plus importé, il alourdit inutilement le package.
 
 ---
 
-### C5 — Vérifier `soilgrids.py` et son intégration dans `hydrology.py`
+### C5 — Implémenter `soilgrids.py` avec l'API SoilGrids v2.0 (ISRIC)
 
 **Module :** `weather`
-**Fichier :** `kadi/_sources/soilgrids.py` (1 580 octets)
+**Fichier :** `kadi/_sources/soilgrids.py`
 **Sévérité :** Haute (exactitude scientifique)
 
 **Problème :**
-`hydrology.py` appelle `fetch_soil_type(lat, lon)` pour déterminer automatiquement
-le type de sol. Avec seulement 1 580 octets, l'implémentation est très légère pour
-une source de données géospatiale. Si la fonction retourne une valeur statique ou
-incorrecte, le bilan hydrique sera silencieusement erroné pour des localisations
-dont le sol ne correspond pas au type retourné.
+L'implémentation originale (54 lignes) ne faisait qu'une recherche dans un cache JSON
+local pré-téléchargé manuellement. Si le cache était absent, la fonction retournait
+silencieusement `"ferrugineux"` pour toutes les localisations. Le bilan hydrique
+calculé dans `hydrology.py` pouvait donc être erroné pour des zones dont le sol
+est différent (côte sableuse, zone ferrallitique du Sud).
 
-**Action :**
-1. Lire `soilgrids.py` en entier.
-2. Vérifier si l'appel à l'API SoilGrids est réel ou si c'est une valeur de repli statique.
-3. Documenter le comportement dans la docstring de `Hydrology.__init__`.
-4. Si l'API est réelle : ajouter un test d'intégration avec mock.
+**Action réalisée :**
+`kadi/_sources/soilgrids.py` a été entièrement réécrit (340 lignes) avec :
 
-**Statut : `[ ]` À faire**
+1. **Appel réel à l'API SoilGrids v2.0** (`/classification/query`) :
+   retourne la classe WRB (World Reference Base for Soil Resources) la plus probable
+   pour n'importe quel point GPS dans le monde.
+
+2. **Table de correspondance WRB -> types KadiPy** :
+   basée sur la pédologie béninoise (ORSTOM/IRD, FAO WRB 2014) :
+   - `Ferralsol`, `Nitisol`, `Plinthosol` -> `ferrallitique` (Sud-Bénin)
+   - `Lixisol`, `Acrisol`, `Alisol` -> `ferrugineux` (Centre/Nord-Bénin)
+   - `Arenosol`, `Regosol` -> `sableux` (littoral et Sahel)
+   - `Luvisol`, `Cambisol`, `Gleysol`, `Fluvisol` -> `limoneux` (couloirs fluviaux)
+
+3. **Stratégie en cascade** :
+   cache local JSON (~/.kadi/soilgrids_cache.json) -> API SoilGrids -> fallback statique.
+
+4. **Robustesse** : retry avec backoff exponentiel (3 tentatives), gestion des
+   timeouts, erreurs HTTP, et réponses malformées.
+
+5. **Tests unitaires** : `tests/weather/test_soilgrids.py` avec 18 tests couvrant
+   la traduction WRB, le cache, les appels API mockés, et le comportement de fallback.
+
+**Fichiers modifiés/créés :**
+- `kadi/_sources/soilgrids.py` (réécrit intégralement)
+- `tests/weather/test_soilgrids.py` (nouveau, 18 tests)
+
+**Statut : `[x]` Résolu**
 
 ---
 
