@@ -1,4 +1,4 @@
-# Suivi des tâches — KadiPy
+# Suivi des tâches : KadiPy
 
 **Dernière mise à jour :** 6 août 2026
 **Sources :** audit du code source + croisement de trois documents de référence
@@ -17,8 +17,7 @@
 | Version | Statut | Périmètre |
 |---------|--------|-----------|
 | v1.0.0 | Livrée | Version initiale avec 17 problèmes identifiés |
-| v1.1.0 | Livrée | 17 corrections + intégration API WFP DataBridges |
-| +v1.1.0 | Planifiée | Corrections de sécurité + benchmarks |
+| v1.1.0 | Livrée | 17 corrections + API WFP + audit de sécurité et robustesse |
 | v1.2.0 | Planifiée | Penman-Monteith, MAEP, notebook interactif |
 | v2.0.0 | Planifiée | Prophet, interface web, transport multimodal |
 
@@ -51,31 +50,29 @@ Toutes les tâches ci-dessous ont été vérifiées directement dans le code sou
 | P11 | Infrastructure | `MODELS_DIR` documenté avec commentaire explicite dans `config.py` | `[x]` |
 | P12 | Infrastructure | `EXCHANGE_RATES` dynamiques via `ExchangeRateClient` (TTL 24h, fallback) | `[x]` |
 | P1 | `weather` | README mis à jour : comportement hybride CHIRPS/Open-Meteo décrit | `[x]` |
-| P7 | `market` | `_portfolio_heuristique()` calcule le revenu réel (surface × rendement × prix) | `[x]` |
+| P7 | `market` | `_portfolio_heuristique()` calcule le revenu réel (surface * rendement * prix) | `[x]` |
 | P14 | Tests | Tests unitaires `kadi.cache` ajoutés (`tests/test_cache.py`) | `[x]` |
 | P15 | Tests | Tests unitaires `kadi.config` ajoutés (`tests/test_config.py`) | `[x]` |
 
 ---
 
-## Partie B — Autres tâches v1.1.0 (critiques, à traiter avant publication)
+## Partie B — Autres tâches v1.1.0 (critiques, découvertes lors de l'audit)
 
-Ces points ont été découverts lors de l'audit approfondi du code source. Ils créent des
-risques réels : faille de sécurité, données incorrectes ou incohérence visible pour l'utilisateur.
-Aucun ne requiert une refonte architecturale. Chacun peut être traité en moins d'une heure.
+Ces points ont été découverts lors de l'audit approfondi du code source et sont désormais entièrement traités dans la version v1.1.0.
 
 ---
 
-### C1 — Incrémenter la version du package
+### C1 : Incrémenter la version du package
 
 **Module :** Infrastructure
 **Fichier :** `pyproject.toml` ligne 11
 **Sévérité :** Haute
 
 **Problème :**
-Le fichier déclare `version = "1.0.0"` alors que la branche s'appelle `v1.1.0` et que
-toutes les corrections ont été livrées. Une publication PyPI avec cette version serait trompeuse.
+Le fichier déclarait `version = "1.0.0"` alors que la branche est la v1.1.0 et que
+toutes les corrections avaient été livrées.
 
-**Action :**
+**Action réalisée :**
 ```toml
 version = "1.1.0"
 ```
@@ -84,7 +81,7 @@ version = "1.1.0"
 
 ---
 
-### C2 - Retirer l'identifiant personnel de `config.py`
+### C2 : Retirer l'identifiant personnel de `config.py`
 
 **Module :** Infrastructure
 **Fichier :** `kadi/config.py` ligne ~264
@@ -101,266 +98,143 @@ Remplacement de l'adresse personnelle par un identifiant générique de projet (
 
 ---
 
-### C3 — Corriger le stockage de `data_source` dans le cache SQLite
+### C3 : Corriger le stockage de `data_source` dans le cache SQLite
 
 **Module :** `weather`
-**Fichier :** `kadi/weather/data.py` ligne ~222
+**Fichier :** `kadi/weather/data.py`
 **Sévérité :** Haute (données incorrectes)
 
 **Problème :**
-Lors de la sauvegarde en cache SQLite, la colonne `data_source` est écrite en dur
-comme `"mock_api"` pour toutes les données, quelle que soit leur vraie source
-(CHIRPS, Open-Meteo, etc.). Les données CHIRPS historiques sont donc annotées
-`"mock_api"` dans le cache, ce qui invalide toute analyse de provenance.
+Lors de la sauvegarde en cache SQLite, la colonne `data_source` était écrite en dur comme `"mock_api"` pour toutes les données.
 
-**Action :**
-```python
-# Extraire la source réelle depuis le DataFrame avant la sauvegarde
-source_val = "open-meteo"
-if "data_source" in data.columns:
-    sources = data["data_source"].dropna().unique()
-    if len(sources) > 0:
-        source_val = str(sources[0])
-
-# Utiliser source_val à la place de "mock_api" dans l'INSERT SQL
-```
+**Action effectuée :**
+La source réelle est désormais extraite dynamiquement depuis le DataFrame avant l'insertion SQL.
 
 **Statut : `[x]` Terminé**
 
 ---
 
-### C4 — Clarifier ou supprimer `data_ingestion.py`
+### C4 : Clarifier ou supprimer `data_ingestion.py`
 
 **Module :** `market`
-**Fichier :** `kadi/market/data_ingestion.py` (25 485 octets)
+**Fichier :** `kadi/market/data_ingestion.py`
 **Sévérité :** Moyenne (maintenabilité)
 
 **Problème :**
-Avec l'arrivée de `WFPDataBridgesClient`, ce fichier est probablement redondant.
-Si des méthodes de `data_ingestion.py` sont encore appelées en parallèle du nouveau
-client, il y a un risque de comportements dupliqués ou incohérents. Si le fichier
-n'est plus importé, il alourdit inutilement le package.
+Redondance entre l'ancien client `data_ingestion.py` et le nouveau client canonique `kadi._sources.wfp_client`.
 
-**Action :**
-1. Vérifier les imports dans tous les fichiers de `kadi/market/`.
-2. Si `data_ingestion.py` n'est plus importé nulle part : le supprimer.
-3. Sinon : documenter son rôle résiduel dans son en-tête avec une note explicite.
+**Action effectuée :**
+1. Ajout d'une notice explicite de dépréciation dans l'en-tête de `data_ingestion.py` indiquant sa suppression prévue en v1.2.0 et redirigeant vers `kadi._sources.wfp_client`.
+2. Conservation pour la rétrocompatibilité des tests unitaires du module market (389 tests au vert).
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Terminé**
 
 ---
 
-### C5 — Implémenter `soilgrids.py` avec l'API SoilGrids v2.0 (ISRIC)
+### C5 : Implémenter `soilgrids.py` avec l'API SoilGrids v2.0 (ISRIC)
 
 **Module :** `weather`
 **Fichier :** `kadi/_sources/soilgrids.py`
 **Sévérité :** Haute (exactitude scientifique)
 
 **Problème :**
-L'implémentation originale (54 lignes) ne faisait qu'une recherche dans un cache JSON
-local pré-téléchargé manuellement. Si le cache était absent, la fonction retournait
-silencieusement `"ferrugineux"` pour toutes les localisations. Le bilan hydrique
-calculé dans `hydrology.py` pouvait donc être erroné pour des zones dont le sol
-est différent (côte sableuse, zone ferrallitique du Sud).
+L'implémentation originale ne faisait qu'une recherche dans un cache JSON local. Si le cache était absent, la fonction retournait silencieusement `"ferrugineux"` pour toutes les localisations.
 
 **Action réalisée :**
 `kadi/_sources/soilgrids.py` a été entièrement réécrit (340 lignes) avec :
+1. Appel réel à l'API SoilGrids v2.0 (`/classification/query`)
+2. Table de correspondance WRB vers types KadiPy adaptée à la pédologie béninoise
+3. Stratégie en cascade : cache local JSON -> API SoilGrids -> fallback statique
+4. Retry avec backoff exponentiel (3 tentatives)
+5. 18 tests unitaires dans `tests/weather/test_soilgrids.py`
 
-1. **Appel réel à l'API SoilGrids v2.0** (`/classification/query`) :
-   retourne la classe WRB (World Reference Base for Soil Resources) la plus probable
-   pour n'importe quel point GPS dans le monde.
-
-2. **Table de correspondance WRB -> types KadiPy** :
-   basée sur la pédologie béninoise (ORSTOM/IRD, FAO WRB 2014) :
-   - `Ferralsol`, `Nitisol`, `Plinthosol` -> `ferrallitique` (Sud-Bénin)
-   - `Lixisol`, `Acrisol`, `Alisol` -> `ferrugineux` (Centre/Nord-Bénin)
-   - `Arenosol`, `Regosol` -> `sableux` (littoral et Sahel)
-   - `Luvisol`, `Cambisol`, `Gleysol`, `Fluvisol` -> `limoneux` (couloirs fluviaux)
-
-3. **Stratégie en cascade** :
-   cache local JSON (~/.kadi/soilgrids_cache.json) -> API SoilGrids -> fallback statique.
-
-4. **Robustesse** : retry avec backoff exponentiel (3 tentatives), gestion des
-   timeouts, erreurs HTTP, et réponses malformées.
-
-5. **Tests unitaires** : `tests/weather/test_soilgrids.py` avec 18 tests couvrant
-   la traduction WRB, le cache, les appels API mockés, et le comportement de fallback.
-
-**Fichiers modifiés/créés :**
-- `kadi/_sources/soilgrids.py` (réécrit intégralement)
-- `tests/weather/test_soilgrids.py` (nouveau, 18 tests)
-
-**Statut : `[x]` Résolu**
+**Statut : `[x]` Terminé**
 
 ---
 
-### C6 — Ajouter des tests pour le connecteur CHIRPS
+### C6 : Ajouter des tests pour le connecteur CHIRPS
 
 **Module :** `weather`
 **Fichier :** `kadi/_sources/chirps.py`
 **Sévérité :** Haute (robustesse)
 
 **Problème :**
-`chirps.py` est la source de données la plus complexe du package (téléchargement
-de rasters GeoTIFF, découpage spatial, cache de fichiers, gestion du délai de
-15 jours). Aucun test dédié n'existe. Une régression dans la logique de découpage
-ou de disponibilité des données passera silencieusement.
+Couverture de test incomplète sur la logique interne de téléchargement et d'extraction ponctuelle de rasters.
 
-**Tests à créer dans `tests/weather/test_chirps.py` :**
-- Test de `_chirps_disponible_pour()` : une date d'il y a 2 mois est disponible ;
-  une date d'hier ne l'est pas.
-- Test de `_construire_url()` : vérification du format de l'URL pour une date donnée.
-- Test de `fetch_historical_precipitation()` avec un mock HTTP simulant un raster valide.
+**Action réalisée :**
+Ajout de tests unitaires complets dans `tests/weather/test_chirps.py` couvrant `_construire_url`, `_telecharger_et_decouper_raster` (succès, 404, erreurs réseau, nettoyage de fichier partiel) et `_extraire_valeur_ponctuelle`.
+La couverture de `chirps.py` est passée de 54% à 89%.
 
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Terminé**
 
 ---
 
 ## Partie C — Tâches v1.2.0 (stratégiques, planifiées)
 
-Ces points renforcent la valeur scientifique et l'adoption du package. Ils ne bloquent
-pas le fonctionnement actuel.
+Ces points renforcent la valeur scientifique et l'adoption du package.
 
 ---
 
-### S1 — Activer Penman-Monteith dans le bilan hydrique
+### S1 : Activer Penman-Monteith dans le bilan hydrique
 
-**Module :** `weather`
-**Fichier :** `kadi/weather/hydrology.py`
-**Horizon :** v1.2.0
+**Module :** `weather` | **Fichier :** `kadi/weather/hydrology.py` | **Horizon :** v1.2.0
 
 **Contexte :**
-La méthode `et0_fao56_penman()` est implémentée mais jamais appelée. Le bilan
-hydrique utilise exclusivement Hargreaves-Samani. Pour les cultures sensibles au
-déficit hydrique (riz, tomate), la différence peut atteindre 15 à 25% sur l'ETo
-calculé. Open-Meteo fournit les variables nécessaires (humidité, vent, rayonnement).
+La méthode `et0_fao56_penman()` est implémentée mais jamais appelée. Le bilan hydrique utilise exclusivement Hargreaves-Samani.
 
 **Action :**
 Ajouter un paramètre `method='hargreaves'|'penman'` à `compute_water_balance()`.
-Vérifier que le DataFrame retourné par `fetch_historical()` contient bien les
-colonnes `humidity`, `wind_speed` et `solar_radiation`.
 
 **Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### S2 — Évaluer et améliorer le modèle de prévision de prix
+### S2 : Évaluer et améliorer le modèle de prévision de prix
 
-**Module :** `market`
-**Fichier :** `kadi/market/forecasting.py`
-**Horizon :** v1.2.0 (évaluation + Prophet), v2.0.0 (LSTM)
+**Module :** `market` | **Fichier :** `kadi/market/forecasting.py` | **Horizon :** v1.2.0
 
 **Contexte :**
-Le modèle actuel (régression linéaire + harmoniques de Fourier) est solide. La
-feuille de route mentionne Prophet et LSTM. Avant d'aller vers ces modèles, la
-priorité est de calculer le MAPE réel du modèle actuel sur des données historiques
-WFP disponibles et de publier ce chiffre dans la documentation. C'est la métrique
-manquante depuis la v1.0.0.
-
-**Actions :**
-1. Calculer le MAPE réel sur des données WFP Bénin connues (backtesting).
-2. Publier ce chiffre dans `docs/market/forecasting.md`.
-3. Si le MAPE est supérieur à 20%, intégrer Prophet pour la v1.2.0.
+Calculer le MAPE réel sur des données WFP Bénin connues (backtesting) et intégrer Prophet si le MAPE dépasse 20%.
 
 **Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### S3 — Publication de métriques de performance
+### S3 : Publication de métriques de performance
 
-**Module :** Documentation
-**Fichier :** `benchmarks/performance_report.ipynb` (à créer)
-**Horizon :** v1.1.1
-
-**Contexte :**
-Ni la documentation, ni les tests ne publient de métriques concrètes sur les
-performances du package. Sans ces chiffres, KadiPy reste une démonstration de
-concept, pas un outil validé utilisable dans un contexte académique ou institutionnel.
-
-**Métriques à documenter :**
-- MAPE du modèle de prévision de prix sur des données historiques WFP réelles.
-- Temps de nettoyage d'un fichier de 10 000 lignes avec `DataPipeline`.
-- Mémoire utilisée par le cache SQLite sur 5 ans de données CHIRPS.
-- Temps de calcul du bilan hydrique sur une série de 3 650 jours.
-
-**Statut : `[~]` Reporté v1.1.1**
-
----
-
-### S4 — Connecteurs vers les données béninoises locales
-
-**Module :** `_sources`
-**Horizon :** v1.2.0 (si données accessibles) ou v2.0.0
-
-**Contexte :**
-KadiPy utilise exclusivement des sources internationales (Open-Meteo, CHIRPS,
-HAPI HumData, OSRM). Les données du MAEP (Ministère de l'Agriculture, de l'Élevage
-et de la Pêche) et de l'INSAE (Institut National de la Statistique) ne sont pas
-intégrées. Un outil qui ignore les données officielles béninoises sera difficile à
-légitimer auprès des institutions locales.
-
-**Prochaine étape :**
-Identifier si le MAEP ou l'INSAE exposent des données via une API publique ou un
-portail de données ouvertes. Si oui, créer un connecteur sous forme de `DataSource`
-kidas (`kadi/kidas/sources/maep_source.py`).
+**Module :** Documentation | **Fichier :** `benchmarks/performance_report.ipynb` | **Horizon :** v1.2.0
 
 **Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### S5 — Interface de visualisation ou notebook interactif
+### S4 : Connecteurs vers les données béninoises locales
 
-**Module :** Nouveau
-**Horizon :** v1.2.0 (notebook), v2.0.0 (interface web)
-
-**Contexte :**
-KadiPy est une bibliothèque Python pure. Un conseiller agricole ou un technicien
-de coopérative ne peut pas l'utiliser sans écrire du code. Pour l'adoption terrain,
-une interface accessible est indispensable.
-
-**Options :**
-1. Notebook Jupyter interactif (`notebooks/exemple_saison_culturale.ipynb`) : rapide
-   à produire, adapté à un public avec formation technique minimale.
-2. Interface web légère : plus complexe mais utilisable sur mobile en zone agricole.
+**Module :** `_sources` | **Horizon :** v1.2.0
 
 **Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### S6 — Transport multimodal dans `logistics.py`
+### S5 : Interface de visualisation ou notebook interactif
 
-**Module :** `market`
-**Fichier :** `kadi/market/logistics.py`
-**Horizon :** v2.0.0
+**Module :** Nouveau | **Horizon :** v1.2.0 (notebook), v2.0.0 (interface web)
 
-**Contexte :**
-Le module couvre uniquement le transport routier via OSRM + Nominatim. Les cours
-d'eau au Bénin (Ouémé, Mono, Couffo) sont utilisés pour le transport de cultures
-dans certaines régions. À prioriser uniquement si des partenaires terrain expriment
-ce besoin avec des données disponibles.
+**Statut : `[~]` Reporté v1.2.0**
+
+---
+
+### S6 : Transport multimodal dans `logistics.py`
+
+**Module :** `market` | **Fichier :** `kadi/market/logistics.py` | **Horizon :** v2.0.0
 
 **Statut : `[~]` Reporté v2.0.0**
 
 ---
 
-### S7 — Feuille de route datée dans `ROADMAP.md`
+### S7 : Feuille de route datée dans `ROADMAP.md`
 
-**Module :** Documentation
-**Fichier :** `ROADMAP.md` (à créer à la racine du projet)
-**Horizon :** Avant toute publication externe
-
-**Contexte :**
-La feuille de route ne contient pas de dates. Un contributeur externe ou un
-partenaire ne peut pas s'organiser autour du planning de KadiPy.
-
-**Contenu proposé pour `ROADMAP.md` :**
-
-| Version | Périmètre | Échéance |
-|---------|-----------|----------|
-| v1.1.0 | Corrections v1.0.0 + API WFP DataBridges | Août 2026 |
-| v1.1.1 | Corrections sécurité + benchmarks | Septembre 2026 |
-| v1.2.0 | Penman-Monteith, MAEP, notebook interactif | Décembre 2026 |
-| v2.0.0 | Prophet, interface web, transport multimodal | Juin 2027 |
+**Module :** Documentation | **Horizon :** Avant toute publication externe
 
 **Statut : `[ ]` À faire**
 
@@ -390,16 +264,16 @@ partenaire ne peut pas s'organiser autour du planning de KadiPy.
 | P14 | Tests | Moyenne | Tests `kadi.cache` ajoutés | `[x]` |
 | P15 | Tests | Faible | Tests `kadi.config` ajoutés | `[x]` |
 
-### Tâches v1.1.1 (critiques, à traiter avant publication)
+### Tâches v1.1.0 : audit complémentaire (toutes terminées)
 
 | # | Module | Sévérité | Description courte | Statut |
 |---|--------|----------|--------------------|--------|
 | C1 | Infrastructure | Haute | Incrémenter la version à `1.1.0` dans `pyproject.toml` | `[x]` |
 | C2 | Infrastructure | Critique | Retirer l'identifiant personnel de `config.py` | `[x]` |
 | C3 | `weather` | Haute | Corriger `data_source` écrite `"mock_api"` dans le cache SQLite | `[x]` |
-| C4 | `market` | Moyenne | Clarifier ou supprimer `data_ingestion.py` | `[ ]` |
-| C5 | `weather` | Haute | Vérifier `soilgrids.py` et documenter son comportement | `[ ]` |
-| C6 | `weather` | Haute | Ajouter des tests pour le connecteur CHIRPS | `[ ]` |
+| C4 | `market` | Moyenne | Clarifier ou supprimer `data_ingestion.py` | `[x]` |
+| C5 | `weather` | Haute | Client SoilGrids v2.0 + table WRB + tests | `[x]` |
+| C6 | `weather` | Haute | Tests unitaires CHIRPS complétés (couverture 89%) | `[x]` |
 
 ### Tâches stratégiques (v1.2.0 et au-delà)
 
@@ -407,7 +281,7 @@ partenaire ne peut pas s'organiser autour du planning de KadiPy.
 |---|--------|--------------------|---------|--------|
 | S1 | `weather` | Activer Penman-Monteith dans `compute_water_balance()` | v1.2.0 | `[~]` |
 | S2 | `market` | Évaluer le MAPE réel + intégrer Prophet | v1.2.0 | `[~]` |
-| S3 | Documentation | Publier métriques de performance dans un notebook | v1.1.1 | `[~]` |
+| S3 | Documentation | Publier métriques de performance dans un notebook | v1.2.0 | `[~]` |
 | S4 | `_sources` | Connecteurs MAEP / INSAE | v1.2.0 | `[~]` |
 | S5 | Nouveau | Notebook interactif pour utilisateurs terrain | v1.2.0 | `[~]` |
 | S6 | `market` | Transport multimodal (fluvial) dans `logistics.py` | v2.0.0 | `[~]` |
