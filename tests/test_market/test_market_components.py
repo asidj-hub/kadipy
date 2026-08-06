@@ -1141,3 +1141,73 @@ def test_get_market_functionality_index_message_fewsnet():
     with pytest.raises(NotImplementedError, match="FEWSNET"):
         client.get_market_functionality_index("parakou")
 
+
+# ==========================================================================
+# Tests Tâche C — revenu calculé dans _portfolio_heuristique()
+# ==========================================================================
+
+def test_portfolio_heuristique_revenu_calcule_si_prix_connus():
+    """Le revenu heuristique doit être calculé à partir des prix si disponibles.
+
+    Avant la correction (Problème 7), la méthode retournait toujours 1_500_000 XOF
+    quelle que soit la surface ou les prix de marché fournis. Ce test vérifie
+    que le calcul réel est appliqué.
+    """
+    decision = DecisionSupport()
+
+    # Prix de marché connus pour les trois cultures de la répartition heuristique
+    market_forecast = {
+        "maize": {"prix_moyen_xof": 250.0},    # 250 XOF/kg
+        "soybean": {"prix_moyen_xof": 400.0},  # 400 XOF/kg
+        "cowpea": {"prix_moyen_xof": 350.0},   # 350 XOF/kg
+    }
+
+    resultat = decision._portfolio_heuristique(
+        available_land_ha=10.0,
+        climate_forecast={"drought_severity": "no_drought"},
+        market_forecast=market_forecast,
+    )
+
+    # Avec des prix connus, le revenu NE DOIT PAS être 1_500_000 (valeur magique)
+    assert resultat["revenu_attendu_cfa"] != 1_500_000.0, (
+        "Le revenu heuristique est encore la valeur codée en dur (1 500 000 XOF). "
+        "La correction du Problème 7 n'a pas été appliquée."
+    )
+    # Le revenu doit être strictement positif
+    assert resultat["revenu_attendu_cfa"] > 0.0, (
+        f"Le revenu calculé doit être positif, obtenu : {resultat['revenu_attendu_cfa']}."
+    )
+    # Sanity check : avec 10 ha et des prix réalistes, le revenu doit dépasser 1 M XOF
+    assert resultat["revenu_attendu_cfa"] > 1_000_000.0, (
+        "Le revenu semble trop faible pour 10 ha avec des prix au niveau du marché."
+    )
+
+
+def test_portfolio_heuristique_revenu_fallback_si_pas_de_prix():
+    """Sans prix de marché, le revenu doit être un repli cohérent (non nul, non magique).
+
+    Vérifie que le fallback de 150 000 XOF/ha est appliqué proprement et
+    produit un résultat proportionnel à la surface disponible.
+    """
+    decision = DecisionSupport()
+
+    # Appel sans prix de marché disponibles
+    resultat = decision._portfolio_heuristique(
+        available_land_ha=5.0,
+        climate_forecast={},
+        market_forecast={},  # Aucun prix disponible
+    )
+
+    revenu = resultat["revenu_attendu_cfa"]
+
+    # Le revenu de repli doit être positif
+    assert revenu > 0.0, "Le revenu de repli doit être supérieur à zéro."
+
+    # Il ne doit pas être la valeur magique initiale
+    assert revenu != 1_500_000.0, "Le repli ne doit pas être la valeur magique 1 500 000."
+
+    # Avec 5 ha et 150 000 XOF/ha de repli, on attend 750 000 XOF
+    assert revenu == pytest.approx(750_000.0, abs=1.0), (
+        f"Revenu de repli attendu : 750 000 XOF (5 ha × 150 000), obtenu : {revenu}."
+    )
+
