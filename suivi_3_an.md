@@ -84,34 +84,20 @@ version = "1.1.0"
 
 ---
 
-### C2 — Retirer l'identifiant personnel de `config.py`
+### C2 - Retirer l'identifiant personnel de `config.py`
 
 **Module :** Infrastructure
 **Fichier :** `kadi/config.py` ligne ~264
 **Sévérité :** Critique (sécurité)
 
 **Problème :**
-La variable `HAPI_APP_IDENTIFIER` contient une valeur par défaut non nulle encodant
-en base64 la chaîne `kadipy:delsdenla.dev@gmail.com`. Cela crée deux problèmes :
+La variable `HAPI_APP_IDENTIFIER` contenait une valeur par défaut en base64 encodant
+l'adresse personnelle `kadipy:delsdenla.dev@gmail.com`, exposant des données personnelles dans le dépôt public.
 
-1. L'adresse email personnelle est exposée publiquement dans le code source dès la
-   publication sur PyPI ou GitHub.
-2. Tout utilisateur sans variable d'environnement configurée utilise cet identifiant
-   personnel sans le savoir, ce qui contourne la protection par simulation.
+**Action effectuée :**
+Remplacement de l'adresse personnelle par un identifiant générique de projet (`kadipy:requests@kadipy.com`, encodé en `a2FkaXB5OnJlcXVlc3RzQGthZGlweS5jb20=`). Cela permet d'interroger les données réelles de l'API HAPI HumData par défaut sans exposer de données personnelles.
 
-**Action :**
-```python
-# Avant
-HAPI_APP_IDENTIFIER = os.environ.get("HAPI_APP_IDENTIFIER", "a2FkaXB5Oi...")
-
-# Après
-HAPI_APP_IDENTIFIER = os.environ.get("HAPI_APP_IDENTIFIER", "")
-```
-
-La valeur vide force le mode simulation si l'utilisateur n'a pas configuré sa
-variable d'environnement, ce qui est le comportement documenté et attendu.
-
-**Statut : `[ ]` À faire**
+**Statut : `[x]` Terminé**
 
 ---
 
@@ -388,7 +374,7 @@ partenaire ne peut pas s'organiser autour du planning de KadiPy.
 | # | Module | Sévérité | Description courte | Statut |
 |---|--------|----------|--------------------|--------|
 | C1 | Infrastructure | Haute | Incrémenter la version à `1.1.0` dans `pyproject.toml` | `[x]` |
-| C2 | Infrastructure | Critique | Retirer l'identifiant personnel de `config.py` | `[ ]` |
+| C2 | Infrastructure | Critique | Retirer l'identifiant personnel de `config.py` | `[x]` |
 | C3 | `weather` | Haute | Corriger `data_source` écrite `"mock_api"` dans le cache SQLite | `[ ]` |
 | C4 | `market` | Moyenne | Clarifier ou supprimer `data_ingestion.py` | `[ ]` |
 | C5 | `weather` | Haute | Vérifier `soilgrids.py` et documenter son comportement | `[ ]` |
