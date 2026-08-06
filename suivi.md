@@ -240,14 +240,14 @@ Les deux clients sont injectés automatiquement dans `Market` à l'instanciation
 
 | # | Problème | Module | Sévérité | Description courte | Statut |
 |---|---------|--------|----------|--------------------|--------|
-| 2 | `weather` | `weather` | Faible | Alias `temperature_avg/mean` dupliqué dans plusieurs fichiers | `[~]` |
-| 10 | `kidas` | `kidas` | Faible | Clé de cache non hachée dans `execute()` (risque de collision) | `[~]` |
-| 11 | `config` | Infrastructure | Faible | `MODELS_DIR` pointe vers `kadi/_ml/` qui n'existe pas | `[~]` |
-| 12 | `config` | Infrastructure | Moyenne | `EXCHANGE_RATES` statiques, mise à jour prévue non implémentée | `[~]` |
-| 1 | `weather` | `weather` | Moyenne | CHIRPS annoncé dans le README mais désactivé sans mention | `[~]` |
-| 7 | `market` | `market` | Faible | Valeur magique `1_500_000` codée en dur dans `_portfolio_heuristique()` | `[~]` |
-| 14 | `tests` | Tests | Moyenne | `kadi.cache` non testé directement (manque fixtures `tmp_path`) | `[~]` |
-| 15 | `tests` | Tests | Faible | `kadi.config` non testé (variables d'environnement non vérifiées) | `[~]` |
+| 2 | `weather` | `weather` | Faible | Alias `temperature_avg/mean` centralisé dans `_unifier_colonne_temperature()` | `[x]` |
+| 10 | `kidas` | `kidas` | Faible | Clé de cache SHA-256 dans `execute()` | `[x]` |
+| 11 | `config` | Infrastructure | Faible | `MODELS_DIR` documenté (option B : commentaire explicite conservé) | `[x]` |
+| 12 | `config` | Infrastructure | Moyenne | `EXCHANGE_RATES` statiques — partiellement résolu en P9 via `ExchangeRateClient` | `[x]` |
+| 1 | `weather` | `weather` | Moyenne | README mis à jour : comportement hybride CHIRPS/Open-Meteo décrit | `[x]` |
+| 7 | `market` | `market` | Faible | Revenu `_portfolio_heuristique()` calculé (surface × rendement × prix) | `[x]` |
+| 14 | `tests` | Tests | Moyenne | Tests unitaires `kadi.cache` ajoutés (`tests/test_cache.py`) | `[x]` |
+| 15 | `tests` | Tests | Faible | Tests unitaires `kadi.config` ajoutés (`tests/test_config.py`) | `[x]` |
 
 ---
 
@@ -264,11 +264,12 @@ Les deux clients sont injectés automatiquement dans `Market` à l'instanciation
 | 5 | `market` | Moyenne | `get_market_functionality_index()` retourne toujours 7.9 | `[x]` |
 | 16 | CI | Moyenne | Pas de rapport `pytest-cov` dans la CI | `[x]` |
 | — | `market` | N/A | Intégration API WFP DataBridges (v1.1.0) | `[x]` |
-| 2 | `weather` | Faible | Alias `temperature_avg/mean` dupliqué | `[~]` |
-| 10 | `kidas` | Faible | Clé de cache non sécurisée dans `execute()` | `[~]` |
-| 11 | `config` | Faible | `MODELS_DIR` pointe vers un dossier inexistant | `[~]` |
-| 12 | `config` | Moyenne | `EXCHANGE_RATES` statiques sans mise à jour | `[~]` |
-| 1 | `weather` | Moyenne | CHIRPS annoncé mais désactivé sans mention dans le README | `[~]` |
-| 7 | `market` | Faible | Valeur magique `1_500_000` dans `_portfolio_heuristique()` | `[~]` |
-| 14 | `tests` | Moyenne | `kadi.cache` non testé directement | `[~]` |
-| 15 | `tests` | Faible | `kadi.config` non testé | `[~]` |
+| 2 | `weather` | Faible | Alias `temperature_avg/mean` centralisé dans `_unifier_colonne_temperature()` | `[x]` |
+| 10 | `kidas` | Faible | Clé de cache sécurisée par SHA-256 dans `execute()` | `[x]` |
+| 11 | `config` | Faible | `MODELS_DIR` documenté (commentaire explicite, option B) | `[x]` |
+| 12 | `config` | Moyenne | `EXCHANGE_RATES` statiques — résolu via `ExchangeRateClient` (P9) | `[x]` |
+| 1 | `weather` | Moyenne | README mis à jour : comportement hybride CHIRPS/Open-Meteo décrit | `[x]` |
+| 7 | `market` | Faible | Revenu `_portfolio_heuristique()` calculé au lieu de valeur magique | `[x]` |
+| 14 | `tests` | Moyenne | `kadi.cache` testé directement (`tests/test_cache.py`) | `[x]` |
+| 15 | `tests` | Faible | `kadi.config` testé (structure, chemins, env vars) | `[x]` |
+
