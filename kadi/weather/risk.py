@@ -22,9 +22,10 @@ class RiskIndicators:
         """
         Initialise les indicateurs de risque.
 
-        :param location: Instance de Location.
-        :param rainfall_historical: Série historique de pluie.
-        :param forecast_data: DataFrame de prévisions météorologiques.
+        Args:
+            location (Location): Instance de la classe Location.
+            rainfall_historical (pd.Series): Série historique de précipitations journalières.
+            forecast_data (pd.DataFrame): DataFrame de prévisions météorologiques.
         """
         self.location = location
         self.rainfall_historical = rainfall_historical
@@ -34,9 +35,19 @@ class RiskIndicators:
         """
         Calcule l'indice de sécheresse avec la méthode spécifiée.
 
-        :param method: Méthode ('spi', 'markov', 'hurst', 'combined').
-        :param window_months: Fenêtre temporelle pour le calcul du SPI.
-        :return: Dictionnaire avec les résultats de sécheresse.
+        Args:
+            method (str): Méthode de calcul parmi 'spi', 'markov', 'hurst' ou
+                'combined' (toutes les méthodes combinées). Par défaut 'spi'.
+            window_months (int): Fenêtre temporelle d'accumulation en mois
+                pour le calcul du SPI. Par défaut 3.
+
+        Returns:
+            dict: Dictionnaire avec les résultats de sécheresse. Les clés
+                varient selon la méthode choisie (ex: 'spi_3month',
+                'drought_severity', 'markov_p_dry', 'hurst_exponent').
+
+        Raises:
+            ValidationError: Si la méthode spécifiée n'est pas supportée.
         """
         results = {}
         
@@ -153,10 +164,21 @@ class RiskIndicators:
 
     def markov_transition(self, threshold_mm: float = 1.0) -> dict:
         """
-        Calcule les probabilités de transition de Markov (jour sec -> jour sec).
+        Calcule les probabilités de transition de Markov entre jours secs et humides.
 
-        :param threshold_mm: Seuil pour considérer un jour comme humide.
-        :return: Dictionnaire avec les probabilités p00, p01, p10, p11.
+        Args:
+            threshold_mm (float): Seuil de précipitation en millimètres pour
+                considérer un jour comme humide. Par défaut 1.0 mm.
+
+        Returns:
+            dict: Dictionnaire avec les quatre probabilités de transition :
+                - 'p_dry_dry'  : P(sec | sec précédent)
+                - 'p_dry_wet'  : P(humide | sec précédent)
+                - 'p_wet_dry'  : P(sec | humide précédent)
+                - 'p_wet_wet'  : P(humide | humide précédent)
+
+        Raises:
+            InsufficientData: Si la série historique est vide.
         """
         if self.rainfall_historical.empty:
             raise InsufficientData("Aucune donnée historique pour le calcul des probabilités de transition de Markov.")
@@ -201,8 +223,17 @@ class RiskIndicators:
         calcule le rapport R/S moyen pour chaque taille, puis estime H par régression
         log-log. Un exposant H > 0.5 indique une persistance climatique (mémoire longue).
 
-        :param window: Taille maximale de la fenêtre d'analyse (jours).
-        :return: Exposant de Hurst H (compris entre 0.01 et 0.99).
+        Args:
+            window (int): Taille maximale de la fenêtre d'analyse en jours.
+                Par défaut 1095 (environ 3 ans). La fenêtre effective est
+                plafonnée à la moitié de la longueur de la série.
+
+        Returns:
+            float: Exposant de Hurst H, compris entre 0.01 et 0.99.
+                Retourne 0.5 si la série est trop courte pour une régression fiable.
+
+        Raises:
+            InsufficientData: Si la série historique contient moins de 100 jours.
         """
         if len(self.rainfall_historical) < 100:
             raise InsufficientData("Pas assez de données pour l'exposant de Hurst (minimum 100 jours requis).")
@@ -267,9 +298,21 @@ class RiskIndicators:
            pour estimer la tendance climatique sous-jacente.
         La probabilité combinée pondère 70 % sur la prévision API et 30 % sur Markov.
 
-        :param days_ahead: Nombre de jours d'avance (1 à 7).
-        :param min_rainfall_mm: Seuil de précipitation pour considérer un jour comme humide.
-        :return: Dictionnaire avec probabilités par jour et recommandations.
+        Args:
+            days_ahead (int): Nombre de jours d'avance à calculer (1 à 7).
+                Par défaut 1 (probabilité pour demain).
+            min_rainfall_mm (float): Seuil de précipitation en millimètres
+                pour considérer un jour comme humide. Par défaut 1.0 mm.
+
+        Returns:
+            dict: Dictionnaire contenant :
+                - 'tomorrow'   : probabilité de pluie demain (si days_ahead >= 1).
+                - 'N_days'     : probabilité pour le jour N (N >= 2).
+                - 'message'    : phrase de synthèse avec le risque maximal.
+                - 'recommendation' : recommandation agronomique.
+
+        Raises:
+            InsufficientData: Si les données de prévision sont absentes ou vides.
         """
         if self.forecast_data is None or self.forecast_data.empty:
             raise InsufficientData("Données de prévision indisponibles pour estimer la probabilité de pluie.")
@@ -335,8 +378,15 @@ class RiskIndicators:
         """
         Interprète la valeur du SPI pour donner un niveau de sévérité.
 
-        :param spi_value: Valeur de l'indice SPI.
-        :return: Catégorie de sécheresse.
+        Args:
+            spi_value (float): Valeur de l'indice SPI calculé par spi().
+
+        Returns:
+            str: Niveau de sévérité parmi :
+                - 'no_drought' : SPI > 1.0 (période anormalement humide)
+                - 'mild'       : -1.0 <= SPI <= 1.0 (conditions normales)
+                - 'moderate'   : -1.5 <= SPI < -1.0
+                - 'severe'     : SPI < -1.5
         """
         if spi_value > 1.0:
             return 'no_drought' # En réalité anormalement humide
