@@ -3,6 +3,10 @@
 # Ce workflow s'exécute automatiquement à chaque push ou pull request
 # sur la branche principale. Il garantit que le code ne casse pas avant
 # toute fusion ou publication.
+#
+# Deux jobs distincts :
+#   - tests       : tests unitaires (sans appels réseau réels)
+#   - integration : tests d'intégration (vrais appels API, bloquants tolérés)
 
 name: Tests
 
@@ -44,7 +48,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      # Étape 4 : Exécution des tests avec rapport de couverture
+      # Étape 4 : Exécution des tests unitaires avec rapport de couverture
+      # Les tests d'intégration sont exclus automatiquement via pytest.ini (addopts = -m "not integration")
       # --cov=kadi         : mesure la couverture sur le package principal
       # --cov-report=xml   : génère coverage.xml pour Codecov ou autres outils CI
       # --cov-report=term-missing : affiche les lignes non couvertes dans les logs
@@ -67,3 +72,33 @@ jobs:
         with:
           files: coverage.xml
           fail_ci_if_error: false
+
+  # Job séparé pour les tests d'intégration (vrais appels réseau)
+  # Exécuté uniquement sur Python 3.11 pour limiter la consommation de minutes CI.
+  # continue-on-error: true : un échec réseau transitoire ne bloque pas la release.
+  integration:
+    name: "Tests d'intégration (réseau réel)"
+    runs-on: ubuntu-latest
+    needs: tests
+    continue-on-error: true
+
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # Les tests d'intégration font de vrais appels réseau vers Open-Meteo,
+      # WFP DataBridges et OSRM. Un timeout de 60 secondes par test évite
+      # tout blocage en cas de latence élevée du serveur distant.
+      - name: Exécution des tests d'intégration
+        run: |
+          pytest tests/integrations/ -v --tb=short -m integration --timeout=60
