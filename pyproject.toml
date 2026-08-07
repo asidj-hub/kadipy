@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 name = "kadipy"
 
 # Version courante du package
-version = "1.0.0"
+version = "1.1.0"
 
 # Description courte affichée sur la page PyPI
 description = "Le \"pandas\" de l'agriculture africaine. Interface Python pour les données météo, de marché et de récoltes au Bénin."
@@ -68,6 +68,9 @@ dependencies = [
     # Requêtes HTTP vers les APIs météo (Open-Meteo, CHIRPS, WFP, OSRM)
     "requests>=2.25",
 
+    # Analyse du contenu HTML (scraping des prix des carburants)
+    "beautifulsoup4>=4.11",
+
     # Manipulation de données tabulaires (séries temporelles, jointures)
     "pandas>=1.3",
 
@@ -109,14 +112,32 @@ dependencies = [
 dev = [
     # Exécution des tests unitaires
     "pytest>=7.0",
+    # Rapport de couverture de code (utilisé dans la CI et en local)
+    "pytest-cov>=4.0",
     # Mocking des appels HTTP dans les tests
     "pytest-mock>=3.7",
     "responses>=0.21",
     "requests-mock>=1.9",
+    # Timeout par test pour eviter les blocages sur les appels reseau
+    "pytest-timeout>=2.1",
+    # Traitement des rasters CHIRPS (connecteur geospatial)
+    "rioxarray>=0.14",
+    "rasterio>=1.3",
     # Documentation
     "mkdocs>=1.3",
     "mkdocs-material>=8.0",
     "mkdocstrings[python]>=0.20",
+]
+geospatial = [
+    # Découpage et manipulation des rasters GeoTIFF (CHIRPS)
+    "rioxarray>=0.14",
+    "rasterio>=1.3",
+]
+xls = [
+    # Lecture des anciens fichiers .xls (format OLE, antérieurs à Excel 2003)
+    # xlrd >= 2.0 ne supporte plus ce format ; on verrouille la version à <2.0
+    # Installer avec : pip install 'kadipy[xls]'
+    "xlrd<2.0",
 ]
 
 # URL officielles du projet, affichées sur la page PyPI

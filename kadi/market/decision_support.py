@@ -300,7 +300,9 @@ class DecisionSupport:
                 - 'marge_nette_par_tonne'  : espérance de gain par tonne
                 - 'prix_futur_estime'      : prix prévu à l'horizon (XOF/tonne)
                 - 'horizon_mois'           : horizon de stockage utilisé
-                - 'is_simulated'           : True si les prévisions sont simulées
+                - 'is_simulated'           : True si les données de prévision sont
+                  simulées (mode offline ou stub). Propagé depuis predict_price().
+                  Vaut True par défaut si aucun module de prévision n'est disponible.
                 - 'confidence_score'       : score de confiance (0-1)
         """
         # Lecture de l'horizon de stockage (paramètre > config > défaut)
@@ -308,6 +310,7 @@ class DecisionSupport:
             mois_stockage = _HORIZON_MOIS_DEFAULT
         jours_stockage = mois_stockage * 30
 
+        # Valeur par défaut : True si aucun module de prévision n'est disponible
         est_simule = True
 
         # Récupération du prix futur estimé via le module de prévision
@@ -321,7 +324,9 @@ class DecisionSupport:
                 variance = (
                     prevision.get("rmse", prevision["predicted_price"] * 0.05) * 1000
                 )
-                est_simule = True  # Le module forecasting V1 reste un stub
+                # Propagation du flag réel retourné par predict_price().
+                # Par défaut True si la clé est absente (comportement offline conservé).
+                est_simule = prevision.get("is_simulated", True)
             except Exception as e:
                 logger.warning(
                     f"Erreur lors de la prévision {crop}/{market}: {e}. "
@@ -537,11 +542,16 @@ class DecisionSupport:
         climate_forecast: dict,
         market_forecast: dict,
     ) -> dict:
-        """
-        Répartition heuristique de secours pour portfolio_optimization().
+        """Répartition heuristique de secours pour portfolio_optimization().
 
-        Applique des règles agronomiques simples au lieu de l'optimiseur linéaire.
-        Utilisé quand scipy n'est pas disponible ou quand aucune culture n'a de prix.
+        Applique des règles agronomiques simples au lieu de l'optimiseur
+        linéaire. Utilisé quand scipy n'est pas disponible ou quand aucune
+        culture n'a de prix connus.
+
+        Le revenu attendu est calculé à partir des prix disponibles dans
+        market_forecast et des rendements de référence FAO/INSAE du Bénin.
+        Si aucun prix n'est disponible, un repli de 150 000 XOF par hectare
+        est appliqué (valeur prudente pour les céréales sèches béninoises).
 
         Args:
             available_land_ha (float): Surface disponible en hectares.
@@ -549,15 +559,30 @@ class DecisionSupport:
             market_forecast (dict): Prix par culture (peut être vide).
 
         Returns:
-            dict: Répartition heuristique et revenu estimé.
+            dict: Répartition heuristique, revenu estimé et recommandation.
         """
-        # Répartition par défaut : maïs 50%, soja 30%, niébé 20%
+        # Correspondance entre les noms de cultures français (heuristique)
+        # et les clés de _RENDEMENTS_BENIN (anglais, aligné sur WFP/FAO).
+        _NOM_CULTURE_VERS_CLE = {
+            "maïs": "maize",
+            "soja": "soybean",
+            "niébé": "cowpea",
+        }
+
+        # Rendement de repli (t/ha) si la culture n'est pas dans _RENDEMENTS_BENIN
+        _RENDEMENT_DEFAUT = 1.0
+
+        # Repli de revenu (XOF/ha) appliqué si aucun prix de marché n'est disponible
+        _REVENU_REPLI_XOF_PAR_HA = 150_000.0
+
+        # Répartition par défaut : maïs 50 %, soja 30 %, niébé 20 %
         repartition = {
             "maïs": 0.5 * available_land_ha,
             "soja": 0.3 * available_land_ha,
             "niébé": 0.2 * available_land_ha,
         }
 
+        # Ajustement en cas de sécheresse sévère : privilégier le niébé
         severity = climate_forecast.get("drought_severity", "mild")
         secheresse = (
             climate_forecast.get("secheresse_anticipee", False)
@@ -576,10 +601,33 @@ class DecisionSupport:
             else "Conditions normales : répartition équilibrée recommandée."
         )
 
+        # Calcul du revenu attendu à partir des prix de marché disponibles.
+        # Formule : surface_ha × rendement_t_ha × 1 000 kg/t × prix_xof/kg
+        revenu_total = 0.0
+        for nom_fr, surface_ha in repartition.items():
+            # Récupération de la clé anglaise pour la table des rendements
+            cle_anglaise = _NOM_CULTURE_VERS_CLE.get(nom_fr, nom_fr)
+
+            # Prix de marché en XOF/kg (clé "prix_moyen_xof" ou absence → 0)
+            prix_xof_par_kg = market_forecast.get(cle_anglaise, {}).get(
+                "prix_moyen_xof", 0.0
+            )
+
+            # Rendement FAO/INSAE de référence (t/ha)
+            rendement_t_ha = _RENDEMENTS_BENIN.get(cle_anglaise, _RENDEMENT_DEFAUT)
+
+            # Contribution au revenu total
+            revenu_total += surface_ha * rendement_t_ha * 1_000.0 * prix_xof_par_kg
+
+        # Repli proportionnel à la surface si aucun prix n'est disponible
+        if revenu_total == 0.0:
+            revenu_total = available_land_ha * _REVENU_REPLI_XOF_PAR_HA
+
         return {
             "repartition_hectares": repartition,
-            "revenu_attendu_cfa": 1_500_000.0,
+            "revenu_attendu_cfa": round(revenu_total, 2),
             "recommandation": recommandation_texte,
             "methode": "heuristique",
             "confidence_score": 0.3,
         }
+

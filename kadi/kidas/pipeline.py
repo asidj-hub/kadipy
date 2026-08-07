@@ -8,6 +8,7 @@ nettoyage, validation et normalisation, puis met les résultats en cache.
 Son API fluide (chainable) permet une utilisation concise et lisible.
 """
 
+import hashlib
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -67,7 +68,7 @@ class DataPipeline:
 
     Exemple:
         >>> pipeline = DataPipeline()
-        >>> df, report = (
+        >>> df, rapport = (
         ...     pipeline
         ...     .load_data('recolte_2024.xlsx')
         ...     .add_cleaning_step('remove_duplicates')
@@ -76,8 +77,10 @@ class DataPipeline:
         ...     .add_normalization_step({'culture': 'fao_standard'})
         ...     .execute(cache=True)
         ... )
-        >>> print(report['lignes_finales'])
+        >>> print(rapport['nb_rows_out'])
         150
+        >>> print(rapport['quality_score']['overall'])
+        0.97
     """
 
     def __init__(self) -> None:
@@ -88,13 +91,15 @@ class DataPipeline:
         # DataFrame courant (None jusqu'à l'appel de execute())
         self._df: Optional[pd.DataFrame] = None
 
+        # Nombre de lignes brutes avant toute transformation
+        self._lignes_avant: int = 0
+
         # Liste ordonnée des étapes : {'type', 'nom', 'params'}
         self._etapes: List[Dict[str, Any]] = []
 
-        # Rapports agrégés des étapes de traitement
+        # Rapports agrégés internes des étapes de traitement
         self._rapports: Dict[str, Any] = {
             "source": None,
-            "etapes_appliquees": [],
             "nettoyage": None,
             "validation": None,
             "normalisation": None,
@@ -292,7 +297,15 @@ class DataPipeline:
         Returns:
             tuple[pd.DataFrame, dict]: Tuple contenant :
                 - Le DataFrame traité et prêt à l'emploi.
-                - Le rapport complet de toutes les étapes.
+                - Le rapport structuré selon la documentation :
+                    - ``nb_rows_in``    : nombre de lignes brutes chargées.
+                    - ``nb_rows_out``   : nombre de lignes après traitement.
+                    - ``steps_summary`` : liste des noms d'étapes appliquées.
+                    - ``quality_score`` : score qualité (dict) ou None.
+                    - ``warnings``      : liste des avertissements détectés.
+                    - ``cache_utilise`` : True si les données viennent du cache.
+                    - ``details``       : rapports internes (source, nettoyage,
+                      validation, normalisation).
 
         Raises:
             KidasPipelineError: Si aucune source n'a été configurée.
@@ -304,8 +317,13 @@ class DataPipeline:
                 "Aucune source configurée. Appelez load_data() avant execute()."
             )
 
-        # Génération d'une clé de cache basée sur le chemin de la source
-        cle_cache = f"pipeline_{self._source.source_path}"
+        # Génération d'une clé de cache sécurisée : hachage SHA-256 du chemin brut,
+        # tronqué à 16 caractères hexadécimaux pour éviter les collisions et les
+        # erreurs d'encodage avec des chemins contenant des espaces ou des accents.
+        _empreinte = hashlib.sha256(
+            str(self._source.source_path).encode("utf-8")
+        ).hexdigest()[:16]
+        cle_cache = f"pipeline_{_empreinte}"
 
         # Tentative de chargement depuis le cache
         if cache:
@@ -315,15 +333,31 @@ class DataPipeline:
                     "Pipeline kidas : données chargées depuis le cache (clé: '%s').",
                     cle_cache,
                 )
-                self._rapports["cache_utilise"] = True
-                return df_cached, self._rapports
+                # Construction du rapport minimal pour un retour depuis le cache
+                rapport_cache = {
+                    "nb_rows_in":    len(df_cached),
+                    "nb_rows_out":   len(df_cached),
+                    "steps_summary": [e["nom"] for e in self._etapes],
+                    "quality_score": None,
+                    "warnings":      [],
+                    "cache_utilise": True,
+                    "details": {
+                        "source":        self._rapports.get("source"),
+                        "nettoyage":     None,
+                        "validation":    None,
+                        "normalisation": None,
+                    },
+                }
+                return df_cached, rapport_cache
 
-        # Lecture des données depuis la source
+        # Lecture des données depuis la source et mémorisation du nombre de lignes brutes
         try:
             self._df = self._source.read()
+            # Capture du nombre de lignes avant tout traitement
+            self._lignes_avant = len(self._df)
             logger.info(
                 "Pipeline kidas : %d lignes chargées depuis '%s'.",
-                len(self._df),
+                self._lignes_avant,
                 self._source.source_path,
             )
         except Exception as erreur:
@@ -340,11 +374,61 @@ class DataPipeline:
             self._cache.save(cle_cache, self._df)
             self._rapports["cache_utilise"] = True
 
-        # Compilation du rapport final
-        self._rapports["lignes_finales"] = len(self._df) if self._df is not None else 0
-        self._rapports["etapes_appliquees"] = [e["nom"] for e in self._etapes]
+        # Calcul du nombre de lignes en sortie
+        nb_lignes_out = len(self._df) if self._df is not None else 0
 
-        return self._df, self._rapports
+        # Construction du rapport final aligné sur la documentation publique
+        rapport_final = {
+            "nb_rows_in":    self._lignes_avant,
+            "nb_rows_out":   nb_lignes_out,
+            "steps_summary": [e["nom"] for e in self._etapes],
+            "quality_score": self._rapports.get("quality_score"),
+            "warnings":      self._extraire_warnings(),
+            "cache_utilise": self._rapports.get("cache_utilise", False),
+            "details": {
+                "source":        self._rapports.get("source"),
+                "nettoyage":     self._rapports.get("nettoyage"),
+                "validation":    self._rapports.get("validation"),
+                "normalisation": self._rapports.get("normalisation"),
+            },
+        }
+
+        return self._df, rapport_final
+
+    def _extraire_warnings(self) -> List[str]:
+        """Collecte les avertissements depuis les rapports internes.
+
+        Parcourt la liste des validations du rapport de validation pour
+        extraire les erreurs de schéma et les expose sous forme de liste
+        plate à la racine du rapport final. Cela permet à l'utilisateur
+        d'accéder aux avertissements sans naviguer dans la hiérarchie
+        interne du rapport.
+
+        Returns:
+            list[str]: Liste des messages d'avertissement. Vide si aucune
+                étape de validation n'a été exécutée ou si aucune anomalie
+                n'a été détectée.
+        """
+        avertissements: List[str] = []
+
+        # Extraction des erreurs issues du rapport de validation
+        rapport_validation = self._rapports.get("validation")
+        if rapport_validation and isinstance(rapport_validation, dict):
+            # 'validations' est une liste de dicts, chacun représentant
+            # le résultat d'une vérification (schema, ranges, coordinates…)
+            validations = rapport_validation.get("validations", [])
+            for entree in validations:
+                if not isinstance(entree, dict):
+                    continue
+                # Seules les validations de schéma portent une clé 'erreurs'
+                erreurs = entree.get("erreurs", [])
+                if isinstance(erreurs, list) and erreurs:
+                    type_validation = entree.get("type", "validation")
+                    avertissements.extend(
+                        f"[{type_validation}] {msg}" for msg in erreurs
+                    )
+
+        return avertissements
 
     def _executer_etape(self, etape: Dict) -> pd.DataFrame:
         """Exécute une étape individuelle du pipeline sur le DataFrame courant.

@@ -36,11 +36,11 @@ def risk_long_setup():
 
 
 # ---------------------------------------------------------------------------
-# Tests de l'indice de sécheresse (SPI)
+# Tests de l'indice de sécheresse (SPI via loi Gamma)
 # ---------------------------------------------------------------------------
 
-def test_drought_index(risk_setup):
-    """L'indice de sécheresse doit retourner un SPI et un niveau de sévérité."""
+def test_drought_index_retourne_cles_attendues(risk_setup):
+    """drought_index() doit retourner les clés 'spi_3month' et 'drought_severity'."""
     location, precip_data = risk_setup
     risk = RiskIndicators(location, precip_data, pd.DataFrame())
     drought = risk.drought_index(window_months=3)
@@ -49,7 +49,40 @@ def test_drought_index(risk_setup):
     assert 'drought_severity' in drought
 
 
-def test_drought_index_insufficient_data(risk_setup):
+def test_spi_retourne_float(risk_setup):
+    """spi() doit retourner un float quelque soit la valeur calculée."""
+    location, precip_data = risk_setup
+    risk = RiskIndicators(location, precip_data, pd.DataFrame())
+    # Série uniforme : SPI doit être 0.0 (std == 0)
+    resultat = risk.spi(window_months=3)
+    assert isinstance(resultat, float)
+
+
+def test_spi_positif_sur_serie_humide():
+    """SPI doit être positif si le dernier cumul est nettement supérieur à la moyenne historique."""
+    location = Location(latitude=9.3041, longitude=2.0890)
+    dates = pd.date_range(start='2022-01-01', periods=400)
+    # 380 jours à faible pluie puis 20 jours très humides
+    precip = [1.0] * 380 + [30.0] * 20
+    precip_data = pd.Series(precip, index=dates)
+    risk = RiskIndicators(location, precip_data, pd.DataFrame())
+    spi_val = risk.spi(window_months=1)
+    assert spi_val > 0, f"SPI attendu positif (série humide), obtenu {spi_val}"
+
+
+def test_spi_negatif_sur_serie_seche():
+    """SPI doit être négatif si le dernier cumul est nettement inférieur à la moyenne historique."""
+    location = Location(latitude=9.3041, longitude=2.0890)
+    dates = pd.date_range(start='2022-01-01', periods=400)
+    # 380 jours très humides puis 20 jours quasi secs
+    precip = [20.0] * 380 + [0.5] * 20
+    precip_data = pd.Series(precip, index=dates)
+    risk = RiskIndicators(location, precip_data, pd.DataFrame())
+    spi_val = risk.spi(window_months=1)
+    assert spi_val < 0, f"SPI attendu négatif (série sèche), obtenu {spi_val}"
+
+
+def test_drought_index_serie_trop_courte(risk_setup):
     """Un indice sur une série trop courte doit lever InsufficientData."""
     location, _ = risk_setup
     dates_court = pd.date_range(start='2026-01-01', periods=20)
@@ -58,6 +91,20 @@ def test_drought_index_insufficient_data(risk_setup):
 
     with pytest.raises(InsufficientData):
         risk.drought_index(window_months=3)
+
+
+def test_spi_leve_si_trop_peu_de_non_nuls():
+    """InsufficientData doit être levée si les valeurs non nulles sont insuffisantes (< 10)."""
+    location = Location(latitude=9.3041, longitude=2.0890)
+    # Série de 100 jours, presque tous à 0 (seulement 5 jours avec pluie)
+    dates = pd.date_range(start='2025-01-01', periods=100)
+    precip = [0.0] * 95 + [5.0] * 5
+    precip_data = pd.Series(precip, index=dates)
+    risk = RiskIndicators(location, precip_data, pd.DataFrame())
+
+    with pytest.raises(InsufficientData):
+        risk.spi(window_months=3)
+
 
 
 # ---------------------------------------------------------------------------

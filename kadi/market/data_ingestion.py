@@ -1,14 +1,20 @@
 """
-Module de connexion aux APIs externes pour l'ingestion de données de marché.
+Module kadi.market.data_ingestion : DÉPRÉCIÉ depuis la v1.1.0.
 
-Inclut le client WFP DataBridges avec :
-- Retry avec backoff exponentiel
-- Cache SQLite (~/kadi/market_prices.db) pour limiter les appels réseau
-- Flag is_simulated transparent dans tous les retours
-- Colonnes enrichies : source, fetched_at, confidence_score
+Ce module a été conservé pour la rétrocompatibilité des tests existants.
+Le client WFPDataBridgesClient et la fonction _get_with_retry ont été
+déplacés dans kadi._sources, qui est la localisation canonique depuis v1.1.0.
 
-Note : sans clé API WFP (WFP_API_Token), le système fonctionne entièrement
-en mode fallback simulé. Toutes les méthodes restent appelables.
+Pour tout nouveau code, utilisez :
+
+    # Client WFP DataBridges
+    from kadi._sources.wfp_client import WFPDataBridgesClient
+
+    # Taux de change dynamiques
+    from kadi._sources.exchange_client import ExchangeRateClient
+
+Ce fichier (data_ingestion.py) sera supprimé dans la v1.2.0.
+Les tests qui l'importent encore directement doivent être mis à jour.
 """
 
 import os
@@ -599,20 +605,28 @@ class WFPDataBridgesClient:
             return self._generer_donnees_simulees(time_range)
 
     def get_market_functionality_index(self, market_id: str) -> float:
-        """
-        Retourne l'indice de fonctionnalité d'un marché.
+        """Calcule l'indice de fonctionnalité d'un marché.
 
-        Note : stub V1. Retourne une valeur fixe en attendant l'intégration
-        de données réelles (FEWSNET ou WFP Market Monitor).
+        Cette méthode n'est pas encore implémentée. Elle sera disponible
+        après intégration de la source de données FEWSNET ou WFP Market Monitor.
 
         Args:
             market_id (str): L'identifiant du marché.
 
         Returns:
-            float: Indice de fonctionnalité (stub : 7.9 / 10).
+            float: Indice de fonctionnalité normalisé entre 0.0 et 10.0.
+
+        Raises:
+            NotImplementedError: Toujours levée en v1.1.0, la source de
+                données sous-jacente n'est pas encore intégrée.
         """
-        # Stub V1 : valeur en dur, à remplacer par une vraie source
-        return 7.9
+        # Non implémenté en v1.1.0 : la source FEWSNET n'est pas encore intégrée.
+        # Plutôt que de retourner une valeur fictive, on signale explicitement
+        # que la méthode ne peut pas encore produire de résultat fiable.
+        raise NotImplementedError(
+            "get_market_functionality_index() n'est pas encore implémentée. "
+            "Elle sera disponible après intégration de la source FEWSNET."
+        )
 
     def _generer_donnees_simulees(self, time_range: tuple = None) -> pd.DataFrame:
         """

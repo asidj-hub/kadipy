@@ -16,6 +16,7 @@ from kadi.market.forecasting import MarketForecasting
 from kadi.market.logistics import MarketLogistics
 from kadi.market.decision_support import DecisionSupport
 from kadi.market.data_ingestion import WFPDataBridgesClient, _get_with_retry
+from kadi.market._cache import vider_cache
 from kadi.market._normalization import (
     normalize_crop_name,
     normalize_market_name,
@@ -142,6 +143,8 @@ def test_market_facade():
 @responses.activate
 def test_wfp_client_fetch_prices():
     """Teste la récupération de données via l'API WFP DataBridges."""
+    # Vider le cache pour éviter la pollution par d'anciens tests
+    vider_cache("savalou_market", "maize")
     client = WFPDataBridgesClient()
     client.token = "fake_token_for_test"
 
@@ -303,7 +306,7 @@ def test_market_validation_lon_hors_zone():
     """Teste qu'une longitude hors Bénin lève une ValueError."""
     with pytest.raises(ValueError, match="Longitude"):
         # Latitude valide (9.30, dans la zone Bénin) mais longitude
-        # hors plage (5.00 > 3.9) : seule l'erreur de longitude doit être levée
+        # hors plage (5.00 > max_lon de config.py) : seule l'erreur de longitude doit être levée
         Market(9.30, 5.00, "HorsZone")
 
 
@@ -334,6 +337,29 @@ def test_market_coordonnees_valides_extremes():
     # Coin sud-ouest (zone de Cotonou)
     marche_sud = Market(6.40, 2.40, "Cotonou")
     assert marche_sud.location == "Cotonou"
+
+
+def test_market_bornes_gps_issues_de_config():
+    """Vérifie que les constantes GPS du module market correspondent à CONFIG."""
+    from kadi.config import CONFIG
+    from kadi.market import _LAT_MIN, _LAT_MAX, _LON_MIN, _LON_MAX
+
+    # Lecture de la source de vérité
+    bbox = CONFIG.get("weather", {}).get("gps_validation_bbox", {})
+
+    # Les constantes du module doivent refléter exactement la configuration
+    assert _LAT_MIN == bbox.get("min_lat"), (
+        f"_LAT_MIN ({_LAT_MIN}) ne correspond pas à config min_lat ({bbox.get('min_lat')})"
+    )
+    assert _LAT_MAX == bbox.get("max_lat"), (
+        f"_LAT_MAX ({_LAT_MAX}) ne correspond pas à config max_lat ({bbox.get('max_lat')})"
+    )
+    assert _LON_MIN == bbox.get("min_lon"), (
+        f"_LON_MIN ({_LON_MIN}) ne correspond pas à config min_lon ({bbox.get('min_lon')})"
+    )
+    assert _LON_MAX == bbox.get("max_lon"), (
+        f"_LON_MAX ({_LON_MAX}) ne correspond pas à config max_lon ({bbox.get('max_lon')})"
+    )
 
 
 # --- Tests de normalisation des cultures (_normalization.py) ---
@@ -1095,3 +1121,93 @@ def test_facade_market_seasonality():
 
     # Le dictionnaire des indices doit contenir les 12 mois
     assert set(res["indices"].keys()) == set(range(1, 13))
+
+
+# ==========================================================================
+# Tests P7 — get_market_functionality_index() doit lever NotImplementedError
+# ==========================================================================
+
+def test_get_market_functionality_index_leve_not_implemented():
+    """Vérifie que get_market_functionality_index() lève NotImplementedError en v1.1.0."""
+    # Le mode miroir évite tout appel réseau pendant ce test
+    client = WFPDataBridgesClient(use_local_mirror=True)
+    with pytest.raises(NotImplementedError):
+        client.get_market_functionality_index("cotonou")
+
+
+def test_get_market_functionality_index_message_fewsnet():
+    """Vérifie que le message de NotImplementedError mentionne FEWSNET."""
+    client = WFPDataBridgesClient(use_local_mirror=True)
+    with pytest.raises(NotImplementedError, match="FEWSNET"):
+        client.get_market_functionality_index("parakou")
+
+
+# ==========================================================================
+# Tests Tâche C — revenu calculé dans _portfolio_heuristique()
+# ==========================================================================
+
+def test_portfolio_heuristique_revenu_calcule_si_prix_connus():
+    """Le revenu heuristique doit être calculé à partir des prix si disponibles.
+
+    Avant la correction (Problème 7), la méthode retournait toujours 1_500_000 XOF
+    quelle que soit la surface ou les prix de marché fournis. Ce test vérifie
+    que le calcul réel est appliqué.
+    """
+    decision = DecisionSupport()
+
+    # Prix de marché connus pour les trois cultures de la répartition heuristique
+    market_forecast = {
+        "maize": {"prix_moyen_xof": 250.0},    # 250 XOF/kg
+        "soybean": {"prix_moyen_xof": 400.0},  # 400 XOF/kg
+        "cowpea": {"prix_moyen_xof": 350.0},   # 350 XOF/kg
+    }
+
+    resultat = decision._portfolio_heuristique(
+        available_land_ha=10.0,
+        climate_forecast={"drought_severity": "no_drought"},
+        market_forecast=market_forecast,
+    )
+
+    # Avec des prix connus, le revenu NE DOIT PAS être 1_500_000 (valeur magique)
+    assert resultat["revenu_attendu_cfa"] != 1_500_000.0, (
+        "Le revenu heuristique est encore la valeur codée en dur (1 500 000 XOF). "
+        "La correction du Problème 7 n'a pas été appliquée."
+    )
+    # Le revenu doit être strictement positif
+    assert resultat["revenu_attendu_cfa"] > 0.0, (
+        f"Le revenu calculé doit être positif, obtenu : {resultat['revenu_attendu_cfa']}."
+    )
+    # Sanity check : avec 10 ha et des prix réalistes, le revenu doit dépasser 1 M XOF
+    assert resultat["revenu_attendu_cfa"] > 1_000_000.0, (
+        "Le revenu semble trop faible pour 10 ha avec des prix au niveau du marché."
+    )
+
+
+def test_portfolio_heuristique_revenu_fallback_si_pas_de_prix():
+    """Sans prix de marché, le revenu doit être un repli cohérent (non nul, non magique).
+
+    Vérifie que le fallback de 150 000 XOF/ha est appliqué proprement et
+    produit un résultat proportionnel à la surface disponible.
+    """
+    decision = DecisionSupport()
+
+    # Appel sans prix de marché disponibles
+    resultat = decision._portfolio_heuristique(
+        available_land_ha=5.0,
+        climate_forecast={},
+        market_forecast={},  # Aucun prix disponible
+    )
+
+    revenu = resultat["revenu_attendu_cfa"]
+
+    # Le revenu de repli doit être positif
+    assert revenu > 0.0, "Le revenu de repli doit être supérieur à zéro."
+
+    # Il ne doit pas être la valeur magique initiale
+    assert revenu != 1_500_000.0, "Le repli ne doit pas être la valeur magique 1 500 000."
+
+    # Avec 5 ha et 150 000 XOF/ha de repli, on attend 750 000 XOF
+    assert revenu == pytest.approx(750_000.0, abs=1.0), (
+        f"Revenu de repli attendu : 750 000 XOF (5 ha × 150 000), obtenu : {revenu}."
+    )
+

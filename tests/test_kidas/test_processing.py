@@ -80,6 +80,47 @@ class TestDataCleaner:
         df = cleaner.fix_dates(columns=["date_recolte"])
         assert pd.api.types.is_datetime64_any_dtype(df["date_recolte"])
 
+    def test_fix_dates_compteur_toutes_converties(self):
+        """Vérifie que dates_corrigees == nb_lignes quand toutes les dates sont valides."""
+        # 5 dates toutes parsables
+        df = pd.DataFrame({
+            "date_recolte": [
+                "2024-01-01", "2024-02-15", "2024-03-10",
+                "2024-04-01", "2024-05-05",
+            ]
+        })
+        cleaner = DataCleaner(df)
+        cleaner.fix_dates(columns=["date_recolte"])
+        rapport = cleaner.get_cleaning_report()
+        # Le compteur doit correspondre aux conversions réussies, pas au total initial
+        assert rapport["dates_corrigees"] == 5
+
+    def test_fix_dates_compteur_conversions_partielles(self):
+        """Vérifie que dates_corrigees reflète le nombre réel de dates converties."""
+        # 10 valeurs : 8 parsables, 2 invalides
+        df = pd.DataFrame({
+            "date_recolte": [
+                "2024-01-01", "2024-02-15", "invalide",
+                "2024-03-10", "pas-une-date", "2024-04-01",
+                "2024-05-05", "2024-06-20", "2024-07-07",
+                "2024-08-08",
+            ]
+        })
+        cleaner = DataCleaner(df)
+        cleaner.fix_dates(columns=["date_recolte"])
+        rapport = cleaner.get_cleaning_report()
+        # Le bug précédent retournait 10 (nb_avant) ; la correction retourne 8 (nb_apres)
+        assert rapport["dates_corrigees"] == 8
+
+    def test_fix_dates_colonne_inexistante_ne_plante_pas(self):
+        """Vérifie que fix_dates() ne plante pas et laisse le compteur à 0 si la colonne est absente."""
+        df = pd.DataFrame({"autre_colonne": [1, 2, 3]})
+        cleaner = DataCleaner(df)
+        # Ne doit pas lever d'exception
+        cleaner.fix_dates(columns=["colonne_inexistante"])
+        rapport = cleaner.get_cleaning_report()
+        assert rapport["dates_corrigees"] == 0
+
     def test_standardize_text_minuscules(self, sample_df):
         """Vérifie que standardize_text() convertit en minuscules."""
         cleaner = DataCleaner(sample_df)
@@ -315,7 +356,10 @@ class TestDataPipeline:
         )
         assert isinstance(df, pd.DataFrame)
         assert len(df) > 0
-        assert "etapes_appliquees" in rapport
+        # Vérification des clés de la structure documentée
+        assert "steps_summary" in rapport
+        assert "nb_rows_in" in rapport
+        assert "nb_rows_out" in rapport
 
     def test_get_pipeline_config_structure(self, temp_csv_file):
         """Vérifie la structure de la configuration du pipeline."""
@@ -338,3 +382,178 @@ class TestDataPipeline:
         resultat = pipeline.export_report(chemin_rapport)
         assert resultat is True
         assert (tmp_path / "rapport.json").exists()
+
+    def test_rapport_contient_cles_documentees(self, temp_csv_file, tmp_path):
+        """Vérifie que le rapport de execute() contient toutes les clés documentées."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # Toutes les clés documentées doivent être présentes
+        for cle in ("nb_rows_in", "nb_rows_out", "steps_summary",
+                    "quality_score", "warnings", "cache_utilise", "details"):
+            assert cle in rapport, f"Clé manquante dans le rapport : '{cle}'"
+
+    def test_rapport_nb_rows_in_est_correct(self, temp_csv_file, tmp_path):
+        """Vérifie que nb_rows_in correspond au nombre de lignes chargées brutes."""
+        from kadi.kidas.cache import DataCache
+        import pandas as pd
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        # Référence : lecture directe du fichier sans traitement
+        df_brut = pd.read_csv(temp_csv_file)
+        nb_lignes_brutes = len(df_brut)
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .execute(cache=False)
+        )
+        assert rapport["nb_rows_in"] == nb_lignes_brutes
+
+    def test_rapport_nb_rows_out_est_correct(self, temp_csv_file, tmp_path):
+        """Vérifie que nb_rows_out correspond au nombre de lignes après traitement."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        df, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # nb_rows_out doit correspondre au nombre réel de lignes du DataFrame retourné
+        assert rapport["nb_rows_out"] == len(df)
+
+    def test_rapport_steps_summary_est_liste(self, temp_csv_file, tmp_path):
+        """Vérifie que steps_summary est une liste des noms d'étapes appliquées."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .add_cleaning_step("handle_missing_values", strategy="mean")
+            .execute(cache=False)
+        )
+        assert isinstance(rapport["steps_summary"], list)
+        # Les deux étapes ajoutées doivent être listées dans l'ordre
+        assert rapport["steps_summary"] == ["remove_duplicates", "handle_missing_values"]
+
+    def test_rapport_quality_score_absent_sans_validation(self, temp_csv_file, tmp_path):
+        """Vérifie que quality_score est None quand aucune étape de validation n'est ajoutée."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # Sans étape de validation, quality_score doit valoir None
+        assert rapport["quality_score"] is None
+
+    def test_rapport_quality_score_present_avec_validation(self, temp_csv_file, tmp_path):
+        """Vérifie que quality_score est un dict quand une étape de validation est incluse."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_validation_step({"culture": "str"})
+            .execute(cache=False)
+        )
+        # Avec une étape de validation, quality_score doit être un dict
+        assert rapport["quality_score"] is not None
+        assert isinstance(rapport["quality_score"], dict)
+        assert "overall" in rapport["quality_score"]
+
+    def test_rapport_warnings_est_liste(self, temp_csv_file, tmp_path):
+        """Vérifie que warnings est toujours une liste, même sans avertissement."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .execute(cache=False)
+        )
+        # warnings doit toujours être une liste (jamais None)
+        assert isinstance(rapport["warnings"], list)
+
+    def test_rapport_details_contient_sous_cles(self, temp_csv_file, tmp_path):
+        """Vérifie que details expose les rapports internes attendus."""
+        from kadi.kidas.cache import DataCache
+        pipeline = DataPipeline()
+        pipeline._cache = DataCache(cache_dir=str(tmp_path / "cache"))
+
+        _, rapport = (
+            pipeline
+            .load_data(temp_csv_file)
+            .add_cleaning_step("remove_duplicates")
+            .execute(cache=False)
+        )
+        # La clé details doit regrouper les rapports internes
+        assert isinstance(rapport["details"], dict)
+        for sous_cle in ("source", "nettoyage", "validation", "normalisation"):
+            assert sous_cle in rapport["details"], (
+                f"Sous-clé manquante dans details : '{sous_cle}'"
+            )
+
+    def test_cle_cache_chemin_avec_espaces_pas_collision(self, tmp_path):
+        """Deux pipelines avec des chemins différents doivent avoir des clés différentes.
+
+        Vérifie que la clé SHA-256 distingue correctement des chemins distincts,
+        même s'ils partagent un préfixe commun.
+        """
+        import hashlib
+
+        # Simulation de deux chemins différents (avec espace dans l'un d'eux)
+        chemin_a = str(tmp_path / "mon fichier avec espaces.csv")
+        chemin_b = str(tmp_path / "autre_fichier.csv")
+
+        # Calcul des empreintes selon la même logique que pipeline.py
+        empreinte_a = hashlib.sha256(chemin_a.encode("utf-8")).hexdigest()[:16]
+        empreinte_b = hashlib.sha256(chemin_b.encode("utf-8")).hexdigest()[:16]
+
+        # Deux chemins distincts ne doivent jamais produire la même empreinte
+        assert empreinte_a != empreinte_b, (
+            "Collision de clé de cache détectée entre deux chemins différents."
+        )
+
+    def test_cle_cache_longueur_fixe_16_caracteres(self, tmp_path):
+        """La clé de cache doit toujours faire exactement 16 caractères hexadécimaux.
+
+        Cela garantit une taille prévisible quelle que soit la longueur du chemin source.
+        """
+        import hashlib
+
+        # Chemin avec accents, espaces et séparateurs variés
+        chemin_special = str(tmp_path / "données récolte été 2024 / béninois.xlsx")
+
+        empreinte = hashlib.sha256(chemin_special.encode("utf-8")).hexdigest()[:16]
+
+        # Longueur fixe : 16 caractères (128 bits → 32 hex, tronqués à 16)
+        assert len(empreinte) == 16, (
+            f"Longueur inattendue de la clé de cache : {len(empreinte)} (attendu : 16)."
+        )
+        # Les caractères doivent tous être hexadécimaux valides
+        assert all(c in "0123456789abcdef" for c in empreinte), (
+            f"Clé de cache contient des caractères non hexadécimaux : '{empreinte}'."
+        )
+

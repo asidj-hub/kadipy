@@ -28,8 +28,11 @@ LOG_DIR.mkdir(exist_ok=True)
 # Chemin vers le fichier de journalisation principal
 LOG_FILE = LOG_DIR / "kadi.log"
 
-# Chemin vers le répertoire contenant les modèles Machine Learning pré-entraînés
-# Ce chemin est relatif à l'emplacement de ce fichier de configuration
+# Chemin vers le répertoire des modèles Machine Learning pré-entraînés.
+# Réservé pour une future intégration ML (non livré en v1.x).
+# Le répertoire kadi/_ml/ n'existe pas encore dans le dépôt.
+# La constante est conservée pour ne pas casser les scripts ou notebooks
+# qui pourraient l'importer depuis kadi.config.
 MODELS_DIR = Path(__file__).parent / "_ml" / "models"
 
 # Dictionnaire de configuration par défaut pour les différents modules
@@ -69,6 +72,35 @@ CONFIG = {
             "min_lon": -1.5,
             "max_lon": 4.0,
         },
+
+        # ---------------------------------------------------------
+        # Paramètres de la source de données CHIRPS
+        # (Climate Hazards Group InfraRed Precipitation with Stations)
+        # Les rasters utilisés proviennent du sous-dossier africa_daily
+        # à la résolution de 0.05° (environ 5 km).
+        # ---------------------------------------------------------
+        "chirps": {
+            # Source de précipitation par défaut pour fetch_historical().
+            # Valeurs acceptées : 'chirps', 'openmeteo', 'both'
+            # 'both' : CHIRPS pour l'historique long, Open-Meteo pour les données récentes.
+            "source_default": "both",
+
+            # Dossier de stockage local des rasters GeoTIFF découpés sur la
+            # zone d'étude (synchronisé avec gps_validation_bbox ci-dessus).
+            # Les rasters sont organisés par année : <raster_cache_dir>/<YYYY>/
+            "raster_cache_dir": str(Path.home() / ".kadi" / "chirps"),
+
+            # Timeout en secondes pour le téléchargement d'un raster journalier.
+            # Les fichiers africa_daily pèsent environ 1-3 Mo.
+            "http_timeout_sec": 30,
+
+            # Délai de disponibilité des données CHIRPS finales.
+            # Les données d'un mois M sont disponibles vers le 15 du mois M+1.
+            # Exemple : les données de juillet sont disponibles le 15 août.
+            # Cette valeur (en jours) est utilisée pour calculer la date
+            # limite au-delà de laquelle CHIRPS n'est pas encore disponible.
+            "availability_lag_days_after_month_end": 15,
+        },
     },
 
     # ---------------------------------------------------------
@@ -76,7 +108,7 @@ CONFIG = {
     # ---------------------------------------------------------
     "market": {
         # Ordre de priorité des sources pour récupérer les prix (fallback automatique)
-        "sources_priority": ["wfp-vam", "ratin", "scrape-local"],
+        "sources_priority": ["wfp-vam", "scrape-local"],
 
         # Minimum d'historique requis (en semaines) pour que le modèle ML
         # de prédiction des prix soit fiable
@@ -198,18 +230,44 @@ OPENMETEO_API_URL = os.environ.get(
     "https://api.open-meteo.com/v1"
 )
 
+# URL de base du serveur CHIRPS du Climate Hazards Center (CHC) de l'UC Santa Barbara.
+# On utilise le sous-dossier africa_daily (résolution 0.05°, couverture Afrique)
+# plutôt que global_daily pour des fichiers plus légers, adaptés au contexte Bénin.
+# Peut être surchargée par la variable d'environnement CHIRPS_BASE_URL.
+CHIRPS_BASE_URL = os.environ.get(
+    "CHIRPS_BASE_URL",
+    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05"
+)
+
 WFP_VAM_API_URL = os.environ.get(
     "WFP_VAM_API_URL",
     "https://hungermap.wfp.org"
 )
 
-RATIN_SCRAPE_URL = os.environ.get(
-    "RATIN_SCRAPE_URL",
-    "https://www.ratin.net"
+# URL de l'API Frankfurter pour les taux de change en temps réel
+# Peut être surchargée par la variable d'environnement FRANKFURTER_API_URL
+FRANKFURTER_API_URL = os.environ.get(
+    "FRANKFURTER_API_URL",
+    "https://api.frankfurter.dev/v2"
 )
 
-# Taux de change par défaut pour les conversions de devises
+# URL de base de l'API HAPI HumData (PAM)
+# Peut être surchargée par la variable d'environnement HAPI_API_URL
+HAPI_API_URL = os.environ.get(
+    "HAPI_API_URL",
+    "https://hapi.humdata.org/api/v2"
+)
+
+# Identifiant applicatif encodé en base64 pour l'API HAPI HumData
+# Doit impérativement être défini dans la variable d'environnement HAPI_APP_IDENTIFIER
+# Aucune valeur par défaut : l'absence de cet identifiant provoque un fallback simulé
+HAPI_APP_IDENTIFIER = os.environ.get("HAPI_APP_IDENTIFIER", "a2FkaXB5OnJlcXVlc3RzQGthZGlweS5jb20=")
+
+# Taux de change de repli utilisés en mode hors ligne
+# Ces valeurs statiques ne sont lues que si ExchangeRateClient ne peut pas
+# joindre l'API Frankfurter (pas de réseau, timeout, etc.)
+# Format inversé : nombre d'unités XOF pour 1 unité de la devise cible
 EXCHANGE_RATES = {
-    "XOF_USD": 0.0016,  # Mise à jour quotidienne prévue
-    "XOF_EUR": 0.0015,
+    "USD_TO_XOF": 620.0,   # 1 USD ≈ 620 XOF (valeur de repli)
+    "EUR_TO_XOF": 655.957, # 1 EUR = 655.957 XOF (taux fixe UEMOA, valeur de repli)
 }

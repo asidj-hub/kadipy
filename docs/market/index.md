@@ -14,11 +14,11 @@ spécialisés et un client d'ingestion de données.
 
 ```
 Market
-├── data_ingestion   — Client WFP DataBridges + cache SQLite
-├── pricing          — Normalisation, anomalies, saisonnalité
-├── forecasting      — Prévisions par Machine Learning
-├── logistics        — Distances, coûts de transport, météo (Phase 4)
-└── decision_support — Arbitrage, stockage, portefeuille
+├── data_ingestion   : Client WFP DataBridges + cache SQLite
+├── pricing          : Normalisation, anomalies, saisonnalité
+├── forecasting      : Prévisions par Machine Learning
+├── logistics        : Distances, coûts de transport, météo (Phase 4)
+└── decision_support : Arbitrage, stockage, portefeuille
 ```
 
 Chaque sous-module peut être utilisé seul ou via la façade `Market`.
@@ -30,7 +30,7 @@ Chaque sous-module peut être utilisé seul ou via la façade `Market`.
 ```python
 from kadi.market import Market
 
-# Initialisation simple (données simulées si pas de clé WFP)
+# Initialisation simple (accès transparent aux données réelles via HAPI HumData)
 marche = Market(lat=9.30, lon=2.08, location="Parakou")
 
 # Avec intégration météo (Phase 4)
@@ -42,8 +42,8 @@ marche = Market(lat=9.30, lon=2.08, location="Parakou", weather_session=ws)
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `lat` | `float` | Latitude (entre 6.0° et 12.5° N) |
-| `lon` | `float` | Longitude (entre 0.5° et 3.9° E) |
+| `lat` | `float` | Latitude (entre 2.5° et 12.5° N) |
+| `lon` | `float` | Longitude (entre -1.5° et 4.0° E) |
 | `location` | `str` | Nom du marché (ex: `"Cotonou"`, `"Parakou"`) |
 | `env_file` | `str` | Chemin vers le fichier `.env`. Défaut : `".env"` |
 | `weather_session` | `WeatherSession` | Session météo optionnelle pour l'ajustement climatique |
@@ -126,19 +126,19 @@ if risque["weather_available"]:
 
 ---
 
-## Comportement sans clé API WFP
+## Accès aux données et boucle de fallback
 
-Sans clé API, le module fonctionne entièrement avec des données simulées. Cela
-permet de développer et tester toute la logique sans dépendance réseau.
+Par défaut, KadiPy interroge l'API publique HAPI HumData (PAM/OCHA) et le cache SQLite local.
+Aucune clé commercial payante n'est nécessaire pour obtenir des données réelles de prix.
 
-| Indicateur | Valeur sans clé |
-|------------|----------------|
-| `is_simulated` | `True` |
-| `confidence_score` | `0.1` |
-| `source` | `"simulated"` |
+| Niveau | Source | `is_simulated` | `confidence_score` |
+|--------|--------|----------------|-------------------|
+| 1 | Cache SQLite local | `False` | Variable (score d'origine) |
+| 2 | API HAPI HumData / VAM (PAM) | `False` | `0.9` |
+| 3 | API WFP DataBridges (si clé `.env`) | `False` | `1.0` |
+| 4 | Mode simulation (hors-ligne uniquement) | `True` | `0.1` |
 
-Dès qu'une clé WFP est fournie dans `.env`, les données réelles remplacent
-automatiquement les données simulées.
+En cas de coupure de réseau ou d'indisponibilité complète des serveurs distants, le module bascule automatiquement sur le mode simulation avec `is_simulated=True`.
 
 ---
 

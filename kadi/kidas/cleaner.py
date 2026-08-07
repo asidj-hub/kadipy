@@ -357,10 +357,11 @@ class DataCleaner:
                     errors="coerce",
                 )
 
-                # Comptage des conversions réussies
+                # Comptage des conversions réussies après le parsing
                 nb_apres = self.df[colonne].notna().sum()
-                nb_corrigees = int(nb_avant - (nb_avant - nb_apres))
-                nb_dates_corrigees += nb_avant
+                # On comptabilise uniquement les dates effectivement converties
+                nb_corrigees = int(nb_apres)
+                nb_dates_corrigees += nb_corrigees
 
                 logger.debug(
                     "Colonne '%s' convertie en datetime (%d/%d valeurs parsées).",

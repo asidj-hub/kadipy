@@ -7,3 +7,7 @@ documents
 site/
 
 __pycache__
+
+*.egg-info/
+
+examples_local/*

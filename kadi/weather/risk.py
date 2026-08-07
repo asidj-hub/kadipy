@@ -22,9 +22,10 @@ class RiskIndicators:
         """
         Initialise les indicateurs de risque.
 
-        :param location: Instance de Location.
-        :param rainfall_historical: Série historique de pluie.
-        :param forecast_data: DataFrame de prévisions météorologiques.
+        Args:
+            location (Location): Instance de la classe Location.
+            rainfall_historical (pd.Series): Série historique de précipitations journalières.
+            forecast_data (pd.DataFrame): DataFrame de prévisions météorologiques.
         """
         self.location = location
         self.rainfall_historical = rainfall_historical
@@ -34,9 +35,19 @@ class RiskIndicators:
         """
         Calcule l'indice de sécheresse avec la méthode spécifiée.
 
-        :param method: Méthode ('spi', 'markov', 'hurst', 'combined').
-        :param window_months: Fenêtre temporelle pour le calcul du SPI.
-        :return: Dictionnaire avec les résultats de sécheresse.
+        Args:
+            method (str): Méthode de calcul parmi 'spi', 'markov', 'hurst' ou
+                'combined' (toutes les méthodes combinées). Par défaut 'spi'.
+            window_months (int): Fenêtre temporelle d'accumulation en mois
+                pour le calcul du SPI. Par défaut 3.
+
+        Returns:
+            dict: Dictionnaire avec les résultats de sécheresse. Les clés
+                varient selon la méthode choisie (ex: 'spi_3month',
+                'drought_severity', 'markov_p_dry', 'hurst_exponent').
+
+        Raises:
+            ValidationError: Si la méthode spécifiée n'est pas supportée.
         """
         results = {}
         
@@ -62,47 +73,112 @@ class RiskIndicators:
     def spi(self, window_months: int) -> float:
         """
         Calcule le Standardized Precipitation Index (SPI) pour la période récente.
-        Implémentation simplifiée pour le MVP.
-        
-        :param window_months: Fenêtre d'accumulation en mois.
-        :return: Valeur du SPI.
+
+        La méthode suit la définition originale de McKee et al. (1993) :
+
+        1. Calcul du cumul de précipitations sur la fenêtre temporelle demandée.
+        2. Ajustement d'une loi Gamma sur les cumuls strictement positifs via
+           scipy.stats.gamma.fit (localisation fixée à 0 avec floc=0).
+        3. Application d'une correction de masse de probabilité pour les jours sans
+           pluie (cumul nul) : la probabilité en 0 est répartie proportionnellement
+           à la fréquence observée de jours secs.
+        4. Conversion de la probabilité cumulative en score SPI via la fonction
+           quantile de la loi normale inverse (scipy.stats.norm.ppf).
+
+        Args:
+            window_months (int): Fenêtre d'accumulation en mois.
+
+        Returns:
+            float: Valeur du SPI arrondie à 2 décimales. Vaut 0.0 si tous les
+                cumuls sont identiques (écart-type nul).
+
+        Raises:
+            InsufficientData: Si la série est vide, si le nombre de fenêtres
+                calculées est inférieur à 30, si les cumuls non nuls sont
+                trop peu nombreux (< 10) pour ajuster une loi Gamma, ou si
+                l'ajustement Gamma échoue numériquement.
         """
         if self.rainfall_historical.empty:
             raise InsufficientData("Aucune donnée historique pour le calcul du SPI.")
-            
-        # Cumul de précipitation sur la fenêtre temporelle
+
+        # Calcul des cumuls glissants sur la fenêtre temporelle
         days = window_months * 30
-        rolling_sum = self.rainfall_historical.rolling(window=days, min_periods=days//2).sum()
+        rolling_sum = self.rainfall_historical.rolling(
+            window=days, min_periods=days // 2
+        ).sum()
         rolling_sum = rolling_sum.dropna()
-        
-        if len(rolling_sum) < 30: # Pas assez de données pour faire une loi Gamma
-            raise InsufficientData("Pas assez de jours de données pour ajuster le modèle SPI (minimum 30 requis).")
-            
-        # Ajustement d'une distribution Gamma simplifié
-        # On évite les zéros pour la distribution Gamma
-        valid_data = rolling_sum[rolling_sum > 0]
-        if len(valid_data) == 0:
-            return -3.0 # Extrême sécheresse
-            
-        # Dans un environnement de production, on utiliserait scipy.stats.gamma.fit
-        # et une correction de probabilité mixte pour p(x=0). 
-        # Ici on fait une approximation simple par score Z (loi normale) pour le mock
-        current_val = rolling_sum.iloc[-1]
-        mean_val = rolling_sum.mean()
-        std_val = rolling_sum.std()
-        
-        if std_val == 0:
+
+        # Vérification du nombre minimal de fenêtres
+        if len(rolling_sum) < 30:
+            raise InsufficientData(
+                "Pas assez de jours de données pour ajuster le modèle SPI "
+                "(minimum 30 fenêtres requises)."
+            )
+
+        # Cas dégénéré : tous les cumuls sont identiques, le SPI est nul
+        if rolling_sum.std() == 0:
             return 0.0
-            
-        spi_val = (current_val - mean_val) / std_val
-        return round(float(spi_val), 2)
+
+        # Valeur du cumul courant (point le plus récent de la série)
+        current_val = float(rolling_sum.iloc[-1])
+
+        # Calcul de la proportion de jours sans pluie (correction de masse)
+        n_total = len(rolling_sum)
+        n_zero = int((rolling_sum == 0).sum())
+        q_zero = n_zero / n_total
+
+        # Isolation des cumuls strictement positifs pour l'ajustement Gamma
+        valid_data = rolling_sum[rolling_sum > 0].values
+
+        if len(valid_data) < 10:
+            raise InsufficientData(
+                "Pas assez de cumuls non nuls pour ajuster une loi Gamma "
+                f"(trouvé {len(valid_data)}, minimum 10 requis). "
+                "La période analysée est peut-être trop sèche."
+            )
+
+        # Ajustement de la loi Gamma (floc=0 fixe le paramètre de localisation à 0)
+        try:
+            shape, loc, scale = stats.gamma.fit(valid_data, floc=0)
+        except Exception as exc:
+            raise InsufficientData(
+                f"L'ajustement de la loi Gamma a échoué : {exc}. "
+                "Vérifiez la qualité de la série pluviométrique."
+            ) from exc
+
+        # Calcul de la probabilité cumulative avec correction de masse en 0
+        if current_val == 0:
+            # Les jours sans pluie tombent dans la masse ponctuelle en 0
+            prob_cumul = q_zero / 2.0
+        else:
+            # Probabilité mixte : masse en 0 + CDF Gamma sur les valeurs positives
+            prob_gamma = float(stats.gamma.cdf(current_val, shape, loc=loc, scale=scale))
+            prob_cumul = q_zero + (1.0 - q_zero) * prob_gamma
+
+        # Clip de sécurité pour éviter +/-inf lors de l'appel à norm.ppf
+        prob_cumul = float(np.clip(prob_cumul, 1e-6, 1.0 - 1e-6))
+
+        # Conversion en score SPI via la loi normale inverse
+        spi_val = float(stats.norm.ppf(prob_cumul))
+        return round(spi_val, 2)
 
     def markov_transition(self, threshold_mm: float = 1.0) -> dict:
         """
-        Calcule les probabilités de transition de Markov (jour sec -> jour sec).
+        Calcule les probabilités de transition de Markov entre jours secs et humides.
 
-        :param threshold_mm: Seuil pour considérer un jour comme humide.
-        :return: Dictionnaire avec les probabilités p00, p01, p10, p11.
+        Args:
+            threshold_mm (float): Seuil de précipitation en millimètres pour
+                considérer un jour comme humide. Par défaut 1.0 mm.
+
+        Returns:
+            dict: Dictionnaire avec les quatre probabilités de transition :
+                - 'p_dry_dry'  : P(sec | sec précédent)
+                - 'p_dry_wet'  : P(humide | sec précédent)
+                - 'p_wet_dry'  : P(sec | humide précédent)
+                - 'p_wet_wet'  : P(humide | humide précédent)
+
+        Raises:
+            InsufficientData: Si la série historique est vide.
         """
         if self.rainfall_historical.empty:
             raise InsufficientData("Aucune donnée historique pour le calcul des probabilités de transition de Markov.")
@@ -147,8 +223,17 @@ class RiskIndicators:
         calcule le rapport R/S moyen pour chaque taille, puis estime H par régression
         log-log. Un exposant H > 0.5 indique une persistance climatique (mémoire longue).
 
-        :param window: Taille maximale de la fenêtre d'analyse (jours).
-        :return: Exposant de Hurst H (compris entre 0.01 et 0.99).
+        Args:
+            window (int): Taille maximale de la fenêtre d'analyse en jours.
+                Par défaut 1095 (environ 3 ans). La fenêtre effective est
+                plafonnée à la moitié de la longueur de la série.
+
+        Returns:
+            float: Exposant de Hurst H, compris entre 0.01 et 0.99.
+                Retourne 0.5 si la série est trop courte pour une régression fiable.
+
+        Raises:
+            InsufficientData: Si la série historique contient moins de 100 jours.
         """
         if len(self.rainfall_historical) < 100:
             raise InsufficientData("Pas assez de données pour l'exposant de Hurst (minimum 100 jours requis).")
@@ -213,9 +298,21 @@ class RiskIndicators:
            pour estimer la tendance climatique sous-jacente.
         La probabilité combinée pondère 70 % sur la prévision API et 30 % sur Markov.
 
-        :param days_ahead: Nombre de jours d'avance (1 à 7).
-        :param min_rainfall_mm: Seuil de précipitation pour considérer un jour comme humide.
-        :return: Dictionnaire avec probabilités par jour et recommandations.
+        Args:
+            days_ahead (int): Nombre de jours d'avance à calculer (1 à 7).
+                Par défaut 1 (probabilité pour demain).
+            min_rainfall_mm (float): Seuil de précipitation en millimètres
+                pour considérer un jour comme humide. Par défaut 1.0 mm.
+
+        Returns:
+            dict: Dictionnaire contenant :
+                - 'tomorrow'   : probabilité de pluie demain (si days_ahead >= 1).
+                - 'N_days'     : probabilité pour le jour N (N >= 2).
+                - 'message'    : phrase de synthèse avec le risque maximal.
+                - 'recommendation' : recommandation agronomique.
+
+        Raises:
+            InsufficientData: Si les données de prévision sont absentes ou vides.
         """
         if self.forecast_data is None or self.forecast_data.empty:
             raise InsufficientData("Données de prévision indisponibles pour estimer la probabilité de pluie.")
@@ -281,8 +378,15 @@ class RiskIndicators:
         """
         Interprète la valeur du SPI pour donner un niveau de sévérité.
 
-        :param spi_value: Valeur de l'indice SPI.
-        :return: Catégorie de sécheresse.
+        Args:
+            spi_value (float): Valeur de l'indice SPI calculé par spi().
+
+        Returns:
+            str: Niveau de sévérité parmi :
+                - 'no_drought' : SPI > 1.0 (période anormalement humide)
+                - 'mild'       : -1.0 <= SPI <= 1.0 (conditions normales)
+                - 'moderate'   : -1.5 <= SPI < -1.0
+                - 'severe'     : SPI < -1.5
         """
         if spi_value > 1.0:
             return 'no_drought' # En réalité anormalement humide

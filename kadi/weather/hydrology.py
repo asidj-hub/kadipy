@@ -41,7 +41,7 @@ class Hydrology:
         from kadi._sources.soilgrids import fetch_soil_type
         return fetch_soil_type(location.latitude, location.longitude)
 
-    def et0_hargreaves(self, tmin: float, tmax: float, day_of_year: int) -> float:
+    def et0_hargreaves(self, tmin, tmax, day_of_year) -> float:
         """
         Calcule l'évapotranspiration de référence (ETo) par Hargreaves-Samani.
 
@@ -71,10 +71,12 @@ class Hydrology:
 
         # 2. Formule Hargreaves-Samani
         tmean = (tmax + tmin) / 2.0
-        tdiff = max(0.0, tmax - tmin)
+        tdiff = np.maximum(0.0, tmax - tmin) if isinstance(tmax, np.ndarray) else max(0.0, tmax - tmin)
         k_rs = 0.0023
 
         eto = 0.408 * k_rs * ra * (tmean + 17.8) * (tdiff ** 0.5)
+        if isinstance(eto, np.ndarray):
+            return np.maximum(0.0, eto)
         return float(max(0.0, eto))
 
     def et0_fao56_penman(
@@ -180,54 +182,63 @@ class Hydrology:
             raise InsufficientData("Données météorologiques historiques manquantes pour le calcul du bilan hydrique.")
             
         taw = self.soil_params['taw'] # Total Available Water
-        dr = 0.0 # Depletion (épuisement initial, sol plein = 0)
-        
+        base_cn = self.soil_params['cn_amc2']
+        kc = self.get_crop_coefficients(self.crop, 'mid')
+
+        precip_arr = self.rainfall_data.to_numpy()
+        tmin_arr = self.temperature_data['temperature_min'].to_numpy()
+        tmax_arr = self.temperature_data['temperature_max'].to_numpy()
         dates = self.rainfall_data.index
-        results = []
-        
-        for i, date in enumerate(dates):
-            precip = self.rainfall_data.iloc[i]
-            tmin = self.temperature_data['temperature_min'].iloc[i]
-            tmax = self.temperature_data['temperature_max'].iloc[i]
-            
-            # Pluie sur 5j précédents pour le CN
-            if i >= 5:
-                prior_5d = self.rainfall_data.iloc[i-5:i].sum()
-            else:
-                prior_5d = self.rainfall_data.iloc[:i].sum()
-                
-            # Ruissellement
-            runoff = self.runoff_cn(precip, prior_5d)
-            pluie_eff = max(0.0, precip - runoff)
-            
-            # Evapotranspiration
-            et0 = self.et0_hargreaves(tmin, tmax, date.dayofyear)
-            kc = self.get_crop_coefficients(self.crop, 'mid') # Simplifié pour le MVP
-            etc = et0 * kc
-            
-            # Bilan
-            temp_dr = dr - pluie_eff
-            
+        dayofyear_arr = dates.dayofyear.to_numpy()
+
+        # Calcul des pluies accumulées sur les 5 jours précédents
+        prior_5d_arr = self.rainfall_data.shift(1).rolling(window=5, min_periods=0).sum().fillna(0.0).to_numpy()
+
+        # Vectorisation ETo Hargreaves-Samani
+        eto_arr = self.et0_hargreaves(tmin_arr, tmax_arr, dayofyear_arr)
+        etc_arr = eto_arr * kc
+
+        # Vectorisation du ruissellement SCS-CN
+        cn_1 = base_cn / (2.281 - 0.0128 * base_cn)
+        cn_3 = base_cn / (0.427 + 0.00573 * base_cn)
+        cn_arr = np.where(prior_5d_arr < 12.5, cn_1, np.where(prior_5d_arr > 35.5, cn_3, base_cn))
+        s_arr = (25400.0 / cn_arr) - 254.0
+        ia_arr = 0.2 * s_arr
+
+        runoff_arr = np.where(
+            (precip_arr > 0) & (precip_arr > ia_arr),
+            ((precip_arr - ia_arr) ** 2) / (precip_arr + 0.8 * s_arr),
+            0.0
+        )
+        pluie_eff_arr = np.maximum(0.0, precip_arr - runoff_arr)
+
+        # Calcul séquentiel rapide du stock d'eau du sol
+        n = len(dates)
+        dr_arr = np.zeros(n)
+        reserve_arr = np.zeros(n)
+        stress_arr = np.zeros(n)
+        dr = 0.0
+
+        for i in range(n):
+            temp_dr = dr - pluie_eff_arr[i]
             if temp_dr < 0:
-                dr = 0.0 # Drainage profond
+                dr = 0.0
             else:
-                dr = min(taw, temp_dr + etc)
-                
-            reserve = taw - dr
-            stress_index = dr / taw if taw > 0 else 0
-            
-            results.append({
-                'date': date,
-                'precip': precip,
-                'et0': round(et0, 2),
-                'pluie_eff': round(pluie_eff, 2),
-                'evapotransp': round(etc, 2),
-                'deficit_eau': round(dr, 2),
-                'reserve_utile': round(reserve, 2),
-                'stress_hydrique_index': round(stress_index, 2)
-            })
-            
-        df = pd.DataFrame(results).set_index('date')
+                dr = min(taw, temp_dr + etc_arr[i])
+            dr_arr[i] = dr
+            reserve_arr[i] = taw - dr
+            stress_arr[i] = dr / taw if taw > 0 else 0.0
+
+        df = pd.DataFrame({
+            'precip': precip_arr,
+            'et0': np.round(eto_arr, 2),
+            'pluie_eff': np.round(pluie_eff_arr, 2),
+            'evapotransp': np.round(etc_arr, 2),
+            'deficit_eau': np.round(dr_arr, 2),
+            'reserve_utile': np.round(reserve_arr, 2),
+            'stress_hydrique_index': np.round(stress_arr, 2)
+        }, index=dates)
+
         self.balance_result = df
         return df
 

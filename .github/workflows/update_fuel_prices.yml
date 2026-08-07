@@ -1,0 +1,94 @@
+# Workflow : Mise à jour automatique des prix des carburants au Bénin
+#
+# Ce workflow scrape chaque jour les prix des carburants depuis GlobalPetrolPrices
+# et ouvre automatiquement une Pull Request pour mettre à jour fuel_prices.json.
+# La branche main étant protégée, un commit direct n'est pas possible.
+# Le passage par une PR respecte les règles de protection en place.
+
+name: Mise à jour des prix des carburants
+
+on:
+  # Déclenchement automatique chaque jour à 02h00 UTC (03h00 heure du Bénin)
+  schedule:
+    - cron: "0 2 * * *"
+
+  # Déclenchement manuel depuis l'onglet Actions de GitHub (utile pour tester)
+  workflow_dispatch:
+
+permissions:
+  # Droit de lire et modifier le contenu du dépôt (nécessaire pour le commit)
+  contents: write
+  # Droit de créer et mettre à jour les Pull Requests
+  pull-requests: write
+
+jobs:
+  update-fuel-prices:
+    name: Scraping et mise à jour du fichier JSON
+    runs-on: ubuntu-latest
+
+    steps:
+      # Étape 1 : Récupération du code source avec le token d'écriture
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+        with:
+          # Le token par défaut permet d'écrire sur le dépôt
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Étape 2 : Installation de Python 3.11
+      - name: Configuration de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Étape 3 : Installation des dépendances minimales pour le scraping
+      # On installe uniquement ce dont le script a besoin, pas toutes les dépendances dev
+      - name: Installation des dépendances de scraping
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      # Étape 4 : Exécution du script de scraping
+      # Le script écrit directement dans config/fuel_prices.json en cas de succès
+      # En cas d'erreur (site indisponible, structure HTML modifiée), il lève une
+      # exception et le workflow s'arrête sans modifier le fichier existant
+      - name: Scraping des prix des carburants
+        run: python config/scrap_fuel.py
+
+      # Étape 5 : Création automatique d'une Pull Request si le fichier a changé
+      # L'action peter-evans/create-pull-request gère :
+      #   - la création de la branche data/fuel-prices-update si elle n'existe pas
+      #   - la mise à jour de la branche si elle existe déjà (évite les doublons)
+      #   - la création de la PR (ou la mise à jour de la PR existante)
+      # Si fuel_prices.json n'a pas changé, aucune PR n'est créée (skip automatique)
+      - name: Création de la Pull Request de mise à jour
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # Identité du bot pour le commit
+          commit-message: |
+            feat(data): mise à jour automatique des prix des carburants
+
+            Données récupérées depuis GlobalPetrolPrices le ${{ github.run_id }}
+          # Nom de la branche temporaire utilisée pour la PR
+          branch: data/fuel-prices-update
+          # En cas de branche existante, forcer la mise à jour
+          branch-suffix: ""
+          # Titre et corps de la Pull Request
+          title: "Mise à jour automatique des prix des carburants"
+          body: |
+            ## Mise à jour automatique des prix
+
+            Ce PR a été créé automatiquement par le workflow `Mise à jour des prix des carburants`.
+
+            **Fichier modifié :** `config/fuel_prices.json`
+
+            Les données proviennent de [GlobalPetrolPrices - Bénin](https://www.globalpetrolprices.com/Benin/).
+
+            > Vérifier les valeurs avant de fusionner si des anomalies semblent présentes.
+          # Ne modifier que ce fichier précis (évite d'inclure d'autres modifications)
+          add-paths: config/fuel_prices.json
+          # Labels pour identifier facilement ces PRs dans la liste
+          labels: |
+            data
+            automated
+          # Ne pas supprimer la branche automatiquement après la fusion
+          delete-branch: true
