@@ -1,275 +1,288 @@
-# Suivi des tâches — KadiPy v1.1.0
+# Suivi des tâches : KadiPy
 
-**Source :** `analyse/analyse_1.0.0.md` — analyse du 25 juillet 2026
-
-**Branche :** `v1.1.0`
+**Dernière mise à jour :** 6 août 2026
+**Sources :** audit du code source + croisement de trois documents de référence
+(`analyse_00.md`, `analyse_1.0.0.md`, `suivi.md` v1.1.0)
 
 **Légende :**
 - `[x]` Terminé
 - `[-]` En cours
 - `[ ]` À faire
-- `[~]` Reporté (v1.2.0 ou ultérieure)
+- `[~]` Reporté (version ultérieure précisée)
 
 ---
 
-## Priorité 1 — Corrections bloquantes pour la v1.1.0
+## État général du projet
 
-### P1 — Bug critique : rapport de `execute()` incohérent avec la documentation
-
-**Problème 8** | Module `kadi.kidas` | Sévérité : **Critique**
-
-**Statut : `[x]` Résolu**
-
-La structure du dictionnaire retourné par `DataPipeline.execute()` ne correspondait pas à la documentation.
-Le code a été aligné sur le format canonique documenté (`nb_rows_in`, `nb_rows_out`, `steps_summary`, `quality_score`, `warnings`, `cache_utilise`, `details`).
-
-**Fichiers modifiés :**
-- `kadi/kidas/pipeline.py`
-- `docs/kidas/index.md`, `docs/kidas/pipeline.md`
-- `tests/test_kidas/test_processing.py`
+| Version | Statut | Périmètre |
+|---------|--------|-----------|
+| v1.0.0 | Livrée | Version initiale avec 17 problèmes identifiés |
+| v1.1.0 | Livrée | 17 corrections + API WFP + audit de sécurité et robustesse |
+| v1.2.0 | Planifiée | Penman-Monteith, MAEP, notebook interactif |
+| v2.0.0 | Planifiée | Prophet, interface web, transport multimodal |
 
 ---
 
-### P2 — `storage_vs_sell_now()` force `is_simulated=True` sur des données réelles
+## Partie A — Tâches v1.1.0 (terminées)
 
-**Problème 6** | Module `kadi.market` | Sévérité : **Haute**
+Toutes les tâches ci-dessous ont été vérifiées directement dans le code source.
 
-**Statut : `[x]` Résolu**
+### Corrections bloquantes
 
-La ligne `est_simule = True` qui écrasait le flag réel a été remplacée par
-`est_simule = prevision.get("is_simulated", True)`. Le flag est maintenant propagé
-depuis `predict_price()`. La valeur par défaut `True` est conservée si la clé est
-absente, pour ne pas casser le comportement offline.
+| # | Module | Sévérité | Description | Statut |
+|---|--------|----------|-------------|--------|
+| P8 | `kidas` | Critique | Rapport `execute()` aligné sur la documentation publique | `[x]` |
+| P6 | `market` | Haute | `storage_vs_sell_now()` propage le vrai flag `is_simulated` | `[x]` |
+| P13 | Infrastructure | Haute | `requirements.txt` réécrit comme alias vers `pyproject.toml` | `[x]` |
+| P3 | `weather` | Haute | SPI calculé via loi Gamma (McKee et al. 1993) | `[x]` |
+| P4 | `market` | Haute | Bornes GPS lues depuis `CONFIG` (non codées en dur) | `[x]` |
+| P9 | `kidas` | Haute | `fix_dates()` accumule correctement le compteur de corrections | `[x]` |
+| P5 | `market` | Moyenne | `get_market_functionality_index()` lève `NotImplementedError` | `[x]` |
+| P16 | CI | Moyenne | `pytest-cov>=4.0` ajouté ; CI génère un rapport de couverture | `[x]` |
 
-**Fichiers modifiés :**
-- `kadi/market/decision_support.py` (ligne ~324)
-- `docs/market/decision_support.md` (description du champ `is_simulated`)
+### Améliorations et nouvelles fonctionnalités
+
+| # | Module | Description | Statut |
+|---|--------|-------------|--------|
+| P9-WFP | `market` | `WFPDataBridgesClient` + `ExchangeRateClient` intégrés dans `Market` | `[x]` |
+| P2 | `weather` | Alias `temperature_avg/mean` centralisé dans `_unifier_colonne_temperature()` | `[x]` |
+| P10 | `kidas` | Clé de cache sécurisée par SHA-256 dans `execute()` | `[x]` |
+| P11 | Infrastructure | `MODELS_DIR` documenté avec commentaire explicite dans `config.py` | `[x]` |
+| P12 | Infrastructure | `EXCHANGE_RATES` dynamiques via `ExchangeRateClient` (TTL 24h, fallback) | `[x]` |
+| P1 | `weather` | README mis à jour : comportement hybride CHIRPS/Open-Meteo décrit | `[x]` |
+| P7 | `market` | `_portfolio_heuristique()` calcule le revenu réel (surface * rendement * prix) | `[x]` |
+| P14 | Tests | Tests unitaires `kadi.cache` ajoutés (`tests/test_cache.py`) | `[x]` |
+| P15 | Tests | Tests unitaires `kadi.config` ajoutés (`tests/test_config.py`) | `[x]` |
+
+---
+
+## Partie B — Autres tâches v1.1.0 (critiques, découvertes lors de l'audit)
+
+Ces points ont été découverts lors de l'audit approfondi du code source et sont désormais entièrement traités dans la version v1.1.0.
+
+---
+
+### C1 : Incrémenter la version du package
+
+**Module :** Infrastructure
+**Fichier :** `pyproject.toml` ligne 11
+**Sévérité :** Haute
+
+**Problème :**
+Le fichier déclarait `version = "1.0.0"` alors que la branche est la v1.1.0 et que
+toutes les corrections avaient été livrées.
+
+**Action réalisée :**
+```toml
+version = "1.1.0"
+```
+
+**Statut : `[x]` Terminé**
+
+---
+
+### C2 : Retirer l'identifiant personnel de `config.py`
+
+**Module :** Infrastructure
+**Fichier :** `kadi/config.py` ligne ~264
+**Sévérité :** Critique (sécurité)
+
+**Problème :**
+La variable `HAPI_APP_IDENTIFIER` contenait une valeur par défaut en base64 encodant
+l'adresse personnelle `kadipy:delsdenla.dev@gmail.com`, exposant des données personnelles dans le dépôt public.
+
+**Action effectuée :**
+Remplacement de l'adresse personnelle par un identifiant générique de projet (`kadipy:requests@kadipy.com`, encodé en `a2FkaXB5OnJlcXVlc3RzQGthZGlweS5jb20=`). Cela permet d'interroger les données réelles de l'API HAPI HumData par défaut sans exposer de données personnelles.
+
+**Statut : `[x]` Terminé**
+
+---
+
+### C3 : Corriger le stockage de `data_source` dans le cache SQLite
+
+**Module :** `weather`
+**Fichier :** `kadi/weather/data.py`
+**Sévérité :** Haute (données incorrectes)
+
+**Problème :**
+Lors de la sauvegarde en cache SQLite, la colonne `data_source` était écrite en dur comme `"mock_api"` pour toutes les données.
+
+**Action effectuée :**
+La source réelle est désormais extraite dynamiquement depuis le DataFrame avant l'insertion SQL.
+
+**Statut : `[x]` Terminé**
+
+---
+
+### C4 : Clarifier ou supprimer `data_ingestion.py`
+
+**Module :** `market`
+**Fichier :** `kadi/market/data_ingestion.py`
+**Sévérité :** Moyenne (maintenabilité)
+
+**Problème :**
+Redondance entre l'ancien client `data_ingestion.py` et le nouveau client canonique `kadi._sources.wfp_client`.
+
+**Action effectuée :**
+1. Ajout d'une notice explicite de dépréciation dans l'en-tête de `data_ingestion.py` indiquant sa suppression prévue en v1.2.0 et redirigeant vers `kadi._sources.wfp_client`.
+2. Conservation pour la rétrocompatibilité des tests unitaires du module market (389 tests au vert).
+
+**Statut : `[x]` Terminé**
+
+---
+
+### C5 : Implémenter `soilgrids.py` avec l'API SoilGrids v2.0 (ISRIC)
+
+**Module :** `weather`
+**Fichier :** `kadi/_sources/soilgrids.py`
+**Sévérité :** Haute (exactitude scientifique)
+
+**Problème :**
+L'implémentation originale ne faisait qu'une recherche dans un cache JSON local. Si le cache était absent, la fonction retournait silencieusement `"ferrugineux"` pour toutes les localisations.
+
+**Action réalisée :**
+`kadi/_sources/soilgrids.py` a été entièrement réécrit (340 lignes) avec :
+1. Appel réel à l'API SoilGrids v2.0 (`/classification/query`)
+2. Table de correspondance WRB vers types KadiPy adaptée à la pédologie béninoise
+3. Stratégie en cascade : cache local JSON -> API SoilGrids -> fallback statique
+4. Retry avec backoff exponentiel (3 tentatives)
+5. 18 tests unitaires dans `tests/weather/test_soilgrids.py`
+
+**Statut : `[x]` Terminé**
+
+---
+
+### C6 : Ajouter des tests pour le connecteur CHIRPS
+
+**Module :** `weather`
+**Fichier :** `kadi/_sources/chirps.py`
+**Sévérité :** Haute (robustesse)
+
+**Problème :**
+Couverture de test incomplète sur la logique interne de téléchargement et d'extraction ponctuelle de rasters.
+
+**Action réalisée :**
+Ajout de tests unitaires complets dans `tests/weather/test_chirps.py` couvrant `_construire_url`, `_telecharger_et_decouper_raster` (succès, 404, erreurs réseau, nettoyage de fichier partiel) et `_extraire_valeur_ponctuelle`.
+La couverture de `chirps.py` est passée de 54% à 89%.
+
+**Statut : `[x]` Terminé**
+
+---
+
+## Partie C — Tâches v1.2.0 (stratégiques, planifiées)
+
+Ces points renforcent la valeur scientifique et l'adoption du package.
+
+---
+
+### S1 : Activer Penman-Monteith dans le bilan hydrique
+
+**Module :** `weather` | **Fichier :** `kadi/weather/hydrology.py` | **Horizon :** v1.2.0
+
+**Contexte :**
+La méthode `et0_fao56_penman()` est implémentée mais jamais appelée. Le bilan hydrique utilise exclusivement Hargreaves-Samani.
 
 **Action :**
-```python
-# Avant (incorrect)
-est_simule = True  # Le module forecasting V1 reste un stub
-# Après (correct)
-est_simule = prevision.get("is_simulated", True)
-```
+Ajouter un paramètre `method='hargreaves'|'penman'` à `compute_water_balance()`.
 
-**Fichier :** `kadi/market/decision_support.py` (ligne ~324)
+**Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### P3 — `requirements.txt` désynchronisé avec `pyproject.toml`
+### S2 : Évaluer et améliorer le modèle de prévision de prix
 
-**Problème 13** | Infrastructure | Sévérité : **Haute**
+**Module :** `market` | **Fichier :** `kadi/market/forecasting.py` | **Horizon :** v1.2.0
 
-**Statut : `[x]` Résolu**
+**Contexte :**
+Calculer le MAPE réel sur des données WFP Bénin connues (backtesting) et intégrer Prophet si le MAPE dépasse 20%.
 
-`requirements.txt` a été réécrit comme un alias vers `pyproject.toml` (une seule ligne
-`-e ".[dev]"`), ce qui élimine la désynchronisation à la source. `xlrd<2.0` a été
-ajouté dans les dépendances optionnelles de `pyproject.toml` sous l'extra `[xls]`.
-`dask` a été retiré (non importé dans le code de production).
-
-**Fichiers modifiés :**
-- `requirements.txt` (réécrit)
-- `pyproject.toml` (ajout de l'extra `xls`)
+**Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### P4 — SPI approximé par Z-score au lieu d'une loi Gamma
+### S3 : Publication de métriques de performance
 
-**Problème 3** | Module `kadi.weather` | Sévérité : **Haute**
+**Module :** Documentation | **Fichier :** `benchmarks/performance_report.ipynb` | **Horizon :** v1.2.0
 
-**Statut : `[x]` Résolu**
-
-La méthode `spi()` dans `risk.py` utilisait une approximation Z-score pour
-calculer l'indice SPI. Elle a été remplacée par la méthode standard de
-McKee et al. (1993) :
-
-1. Ajustement d'une loi Gamma sur les cumuls non nuls via
-   `scipy.stats.gamma.fit(valid_data, floc=0)`.
-2. Application d'une correction de masse de probabilité pour les jours
-   sans pluie (cumul nul).
-3. Conversion en score SPI via `scipy.stats.norm.ppf`.
-
-La signature publique de `spi()` est inchangée. La méthode lève maintenant
-`InsufficientData` si le nombre de cumuls non nuls est inférieur à 10.
-
-**Fichiers modifiés :**
-- `kadi/weather/risk.py` (méthode `spi()`, lignes 62-153)
-- `tests/weather/test_risk.py` (nouveaux tests: signe du SPI, cas limites Gamma)
+**Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### P5 — Bornes GPS du module `market` dupliquées en dur
+### S4 : Connecteurs vers les données béninoises locales
 
-**Problème 4** | Module `kadi.market` | Sévérité : **Haute**
+**Module :** `_sources` | **Horizon :** v1.2.0
 
-**Statut : `[x]` Résolu**
-
-Les constantes `_LAT_MIN`, `_LAT_MAX`, `_LON_MIN`, `_LON_MAX` étaient
-définies en dur dans `market/__init__.py` avec des valeurs différentes de
-celles de `config.py` (incohérence réelle : `min_lat` valait 6.0 au lieu de
-2.5, `min_lon` valait 0.5 au lieu de -1.5). Elles sont maintenant lues
-depuis `CONFIG["weather"]["gps_validation_bbox"]` avec des valeurs de repli.
-
-**Action réalisée :**
-```python
-from kadi.config import CONFIG
-
-_bbox = CONFIG.get("weather", {}).get("gps_validation_bbox", {})
-_LAT_MIN = _bbox.get("min_lat", 2.5)
-_LAT_MAX = _bbox.get("max_lat", 12.5)
-_LON_MIN = _bbox.get("min_lon", -1.5)
-_LON_MAX = _bbox.get("max_lon", 4.0)
-```
-
-**Fichiers modifiés :**
-- `kadi/market/__init__.py` (lignes 21-30)
-- `tests/test_market/test_market_components.py` (ajout de
-  `test_market_bornes_gps_issues_de_config`, mise à jour commentaires)
+**Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### P6 — `fix_dates()` accumule un mauvais compteur de dates corrigées
+### S5 : Interface de visualisation ou notebook interactif
 
-**Problème 9** | Module `kadi.kidas` | Sévérité : **Haute**
+**Module :** Nouveau | **Horizon :** v1.2.0 (notebook), v2.0.0 (interface web)
 
-**Statut : `[x]` Résolu**
-
-Dans `cleaner.py`, la variable `nb_corrigees` était calculée mais jamais utilisée.
-Le compteur accumulait `nb_avant` (total des valeurs non-null avant parsing) au
-lieu du nombre réel de conversions réussies. Si une colonne avait 100 valeurs et
-80 étaient parsées avec succès, le rapport affichait 100 au lieu de 80.
-
-**Action réalisée :**
-```python
-# Avant (incorrect)
-nb_corrigees = int(nb_avant - (nb_avant - nb_apres))  # toujours = nb_apres
-nb_dates_corrigees += nb_avant                         # mauvais compteur
-# Après (correct)
-nb_corrigees = int(nb_apres)
-nb_dates_corrigees += nb_corrigees
-```
-
-**Fichiers modifiés :**
-- `kadi/kidas/cleaner.py` (lignes ~360-363)
-- `tests/test_kidas/test_processing.py` (ajout de `test_fix_dates_compteur_toutes_converties`,
-  `test_fix_dates_compteur_conversions_partielles`, `test_fix_dates_colonne_inexistante_ne_plante_pas`)
+**Statut : `[~]` Reporté v1.2.0**
 
 ---
 
-### P7 — `get_market_functionality_index()` retourne toujours 7.9
+### S6 : Transport multimodal dans `logistics.py`
 
-**Problème 5** | Module `kadi.market` | Sévérité : **Moyenne**
+**Module :** `market` | **Fichier :** `kadi/market/logistics.py` | **Horizon :** v2.0.0
 
-**Statut : `[x]` Résolu**
-
-La méthode retournait `7.9` en dur sans aucun calcul. Elle a été remplacée par
-une `NotImplementedError` explicite avec un message orientant vers la future
-source FEWSNET. La docstring a été mise à jour en cohérence.
-
-**Action réalisée :**
-```python
-raise NotImplementedError(
-    "get_market_functionality_index() n'est pas encore implémentée. "
-    "Elle sera disponible après intégration de la source FEWSNET."
-)
-```
-
-**Fichiers modifiés :**
-- `kadi/market/data_ingestion.py` (lignes ~601-625)
-- `tests/test_market/test_market_components.py` (ajout de
-  `test_get_market_functionality_index_leve_not_implemented`,
-  `test_get_market_functionality_index_message_fewsnet`)
+**Statut : `[~]` Reporté v2.0.0**
 
 ---
 
-### P8 — Pas de rapport de couverture `pytest-cov` dans la CI
+### S7 : Feuille de route datée dans `ROADMAP.md`
 
-**Problème 16** | CI / GitHub Actions | Sévérité : **Moyenne**
+**Module :** Documentation | **Horizon :** Avant toute publication externe
 
-**Statut : `[x]` Résolu**
-
-`pytest-cov>=4.0` a été ajouté dans les dépendances `[dev]` de `pyproject.toml`.
-Le workflow CI a été mis à jour pour générer un rapport de couverture avec un
-seuil minimal de 70 %, et un rapport XML pour Codecov (optionnel, Python 3.11 uniquement).
-
-**Fichiers modifiés :**
-- `pyproject.toml` (ajout de `pytest-cov>=4.0` dans `[dev]`)
-- `.github/workflows/tests.yml` (étape 4 mise à jour, étape 5 Codecov ajoutée)
-
----
-
-### P9 — Intégration transparente de l'API WFP DataBridges (nouvelle fonctionnalité v1.1.0)
-
-**Nouvelle fonctionnalité** | Module `kadi.market` | Sévérité : N/A
-
-**Statut : `[x]` Résolu**
-
-Deux clients API ont été créés et intégrés dans le module `kadi.market` :
-
-**1. `ExchangeRateClient`** — Taux de change dynamiques via Frankfurter (`api.frankfurter.dev`) :
-- L'API est appelée pour les paires XOF/USD et XOF/EUR.
-- Cache mémoire TTL 24h pour éviter les appels redondants.
-- Fallback automatique sur `config.EXCHANGE_RATES` en mode hors ligne.
-- `EXCHANGE_RATES_DEFAULT` supprimé de `_normalization.py` : source unique dans `config.py`.
-
-**2. `WFPDataBridgesClient`** (HAPI HumData) — Prix de marché réels via l'API HAPI :
-- Appelle l'endpoint `food-prices-market-monitor` de l'API HAPI.
-- Identifiant lu exclusivement depuis `HAPI_APP_IDENTIFIER` (variable d'environnement).
-- Pagination automatique, retry avec backoff exponentiel.
-- Normalisation des colonnes HAPI vers le format interne KadiPy.
-- Fallback : données simulées avec `is_simulated=True` si identifiant absent ou réseau indisponible.
-
-Les deux clients sont injectés automatiquement dans `Market` à l'instanciation.
-
-**Fichiers créés :**
-- `kadi/_sources/exchange_client.py` (nouveau)
-- `kadi/_sources/wfp_client.py` (nouveau)
-- `tests/test_market/test_exchange_client.py` (nouveau)
-- `tests/test_market/test_wfp_client.py` (nouveau)
-
-**Fichiers modifiés :**
-- `kadi/config.py` (ajout `FRANKFURTER_API_URL`, `HAPI_API_URL`, `HAPI_APP_IDENTIFIER` ; mise à jour `EXCHANGE_RATES`)
-- `kadi/market/__init__.py` (injection des deux clients, suppression `env_file`)
-- `kadi/market/pricing.py` (ajout `exchange_client`, import depuis `config.py`)
-- `kadi/market/_normalization.py` (suppression `EXCHANGE_RATES_DEFAULT`)
-
----
-
-## Priorité 2 — Autres améliorations pour la v1.1.0
-
-| # | Problème | Module | Sévérité | Description courte | Statut |
-|---|---------|--------|----------|--------------------|--------|
-| 2 | `weather` | `weather` | Faible | Alias `temperature_avg/mean` centralisé dans `_unifier_colonne_temperature()` | `[x]` |
-| 10 | `kidas` | `kidas` | Faible | Clé de cache SHA-256 dans `execute()` | `[x]` |
-| 11 | `config` | Infrastructure | Faible | `MODELS_DIR` documenté (option B : commentaire explicite conservé) | `[x]` |
-| 12 | `config` | Infrastructure | Moyenne | `EXCHANGE_RATES` statiques — partiellement résolu en P9 via `ExchangeRateClient` | `[x]` |
-| 1 | `weather` | `weather` | Moyenne | README mis à jour : comportement hybride CHIRPS/Open-Meteo décrit | `[x]` |
-| 7 | `market` | `market` | Faible | Revenu `_portfolio_heuristique()` calculé (surface × rendement × prix) | `[x]` |
-| 14 | `tests` | Tests | Moyenne | Tests unitaires `kadi.cache` ajoutés (`tests/test_cache.py`) | `[x]` |
-| 15 | `tests` | Tests | Faible | Tests unitaires `kadi.config` ajoutés (`tests/test_config.py`) | `[x]` |
+**Statut : `[ ]` À faire**
 
 ---
 
 ## Tableau récapitulatif global
 
+### Tâches v1.1.0 (toutes terminées)
+
 | # | Module | Sévérité | Description courte | Statut |
 |---|--------|----------|--------------------|--------|
-| 8 | `kidas` | Critique | Rapport `execute()` incohérent avec la documentation | `[x]` |
-| 6 | `market` | Haute | `storage_vs_sell_now()` force `is_simulated=True` | `[x]` |
-| 13 | `config` | Haute | `requirements.txt` désynchronisé avec `pyproject.toml` | `[x]` |
-| 3 | `weather` | Haute | SPI approximé par Z-score au lieu d'une loi Gamma | `[x]` |
-| 4 | `market` | Haute | Bornes GPS dupliquées en dur au lieu de lire `CONFIG` | `[x]` |
-| 9 | `kidas` | Haute | `nb_dates_corrigees` calculé incorrectement dans `fix_dates()` | `[x]` |
-| 5 | `market` | Moyenne | `get_market_functionality_index()` retourne toujours 7.9 | `[x]` |
-| 16 | CI | Moyenne | Pas de rapport `pytest-cov` dans la CI | `[x]` |
-| — | `market` | N/A | Intégration API WFP DataBridges (v1.1.0) | `[x]` |
-| 2 | `weather` | Faible | Alias `temperature_avg/mean` centralisé dans `_unifier_colonne_temperature()` | `[x]` |
-| 10 | `kidas` | Faible | Clé de cache sécurisée par SHA-256 dans `execute()` | `[x]` |
-| 11 | `config` | Faible | `MODELS_DIR` documenté (commentaire explicite, option B) | `[x]` |
-| 12 | `config` | Moyenne | `EXCHANGE_RATES` statiques — résolu via `ExchangeRateClient` (P9) | `[x]` |
-| 1 | `weather` | Moyenne | README mis à jour : comportement hybride CHIRPS/Open-Meteo décrit | `[x]` |
-| 7 | `market` | Faible | Revenu `_portfolio_heuristique()` calculé au lieu de valeur magique | `[x]` |
-| 14 | `tests` | Moyenne | `kadi.cache` testé directement (`tests/test_cache.py`) | `[x]` |
-| 15 | `tests` | Faible | `kadi.config` testé (structure, chemins, env vars) | `[x]` |
+| P8 | `kidas` | Critique | Rapport `execute()` aligné sur la documentation | `[x]` |
+| P6 | `market` | Haute | `is_simulated` propagé depuis la vraie source | `[x]` |
+| P13 | Infrastructure | Haute | `requirements.txt` réconcilié | `[x]` |
+| P3 | `weather` | Haute | SPI via loi Gamma (McKee et al. 1993) | `[x]` |
+| P4 | `market` | Haute | Bornes GPS lues depuis `CONFIG` | `[x]` |
+| P9 | `kidas` | Haute | `fix_dates()` compteur corrigé | `[x]` |
+| P5 | `market` | Moyenne | `get_market_functionality_index()` lève `NotImplementedError` | `[x]` |
+| P16 | CI | Moyenne | `pytest-cov` ajouté + CI mise à jour | `[x]` |
+| P9-WFP | `market` | N/A | API WFP DataBridges + taux de change dynamiques | `[x]` |
+| P2 | `weather` | Faible | Alias `temperature_avg/mean` centralisé | `[x]` |
+| P10 | `kidas` | Faible | Clé de cache SHA-256 | `[x]` |
+| P11 | Infrastructure | Faible | `MODELS_DIR` documenté | `[x]` |
+| P12 | Infrastructure | Moyenne | `EXCHANGE_RATES` dynamiques | `[x]` |
+| P1 | `weather` | Moyenne | README mis à jour (CHIRPS/Open-Meteo) | `[x]` |
+| P7 | `market` | Faible | `_portfolio_heuristique()` calcule un revenu réel | `[x]` |
+| P14 | Tests | Moyenne | Tests `kadi.cache` ajoutés | `[x]` |
+| P15 | Tests | Faible | Tests `kadi.config` ajoutés | `[x]` |
 
+### Tâches v1.1.0 : audit complémentaire (toutes terminées)
+
+| # | Module | Sévérité | Description courte | Statut |
+|---|--------|----------|--------------------|--------|
+| C1 | Infrastructure | Haute | Incrémenter la version à `1.1.0` dans `pyproject.toml` | `[x]` |
+| C2 | Infrastructure | Critique | Retirer l'identifiant personnel de `config.py` | `[x]` |
+| C3 | `weather` | Haute | Corriger `data_source` écrite `"mock_api"` dans le cache SQLite | `[x]` |
+| C4 | `market` | Moyenne | Clarifier ou supprimer `data_ingestion.py` | `[x]` |
+| C5 | `weather` | Haute | Client SoilGrids v2.0 + table WRB + tests | `[x]` |
+| C6 | `weather` | Haute | Tests unitaires CHIRPS complétés (couverture 89%) | `[x]` |
+
+### Tâches stratégiques (v1.2.0 et au-delà)
+
+| # | Module | Description courte | Horizon | Statut |
+|---|--------|--------------------|---------|--------|
+| S1 | `weather` | Activer Penman-Monteith dans `compute_water_balance()` | v1.2.0 | `[~]` |
+| S2 | `market` | Évaluer le MAPE réel + intégrer Prophet | v1.2.0 | `[~]` |
+| S3 | Documentation | Publier métriques de performance dans un notebook | v1.2.0 | `[~]` |
+| S4 | `_sources` | Connecteurs MAEP / INSAE | v1.2.0 | `[~]` |
+| S5 | Nouveau | Notebook interactif pour utilisateurs terrain | v1.2.0 | `[~]` |
+| S6 | `market` | Transport multimodal (fluvial) dans `logistics.py` | v2.0.0 | `[~]` |
+| S7 | Documentation | Créer `ROADMAP.md` avec planning daté | Avant publication | `[ ]` |
