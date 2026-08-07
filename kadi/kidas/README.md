@@ -1,4 +1,4 @@
-# kidas — KadiPy Data Acquisition & Standardization
+# kidas - KadiPy Data Acquisition & Standardization
 
 `kidas` est le module central de traitement des données agricoles dans KadiPy.
 Il prend en charge le chargement, le nettoyage, la validation, la normalisation
@@ -41,7 +41,7 @@ virtuel :
 source .kadi_venv/bin/activate
 ```
 
-Les dépendances principales sont déclarées dans `requirements.txt` :
+Les dépendances principales sont déclarées dans `pyproject.toml` (avec `requirements.txt` servant d'alias pour le développement) :
 
 | Dépendance | Usage |
 |---|---|

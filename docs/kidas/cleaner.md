@@ -129,6 +129,19 @@ df = cleaner.fix_encoding()
 
 ---
 
+### `fix_dates(columns, infer_format)`
+
+Normalise les colonnes de dates hétérogènes vers le type `datetime64`.
+Seules les valeurs effectivement parsées et converties avec succès sont comptabilisées
+dans le compteur `dates_corrigees` du rapport de nettoyage.
+
+```python
+# Normalisation d'une colonne de dates
+df = cleaner.fix_dates(columns=["date_recolte"])
+```
+
+---
+
 ## Exemple complet
 
 ```python

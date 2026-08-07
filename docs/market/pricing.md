@@ -92,7 +92,7 @@ prix_kg = pricing.normalize_unit(price=100_000, unit="T", currency="XOF")
 | `"KG"` | × 1 (inchangé) |
 | `"100KG"` (sac) | ÷ 100 |
 | `"50KG"` (sac) | ÷ 50 |
-| Devises étrangères | × taux de change vers XOF |
+| Devises étrangères (`USD`, `EUR`...) | Converties via `ExchangeRateClient` (API Frankfurter, cache 24h et repli `EXCHANGE_RATES` dans `config.py`) |
 
 ---
 

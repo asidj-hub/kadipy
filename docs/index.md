@@ -50,8 +50,11 @@ cd kadipy
 python -m venv .kadi_venv
 source .kadi_venv/bin/activate
 
-# Installation des dépendances
-pip install -r requirements.txt
+# Installation des dépendances via pyproject.toml (ou alias requirements.txt)
+pip install -e ".[dev]"
+
+# Optionnel : support des anciens fichiers Excel (.xls)
+pip install -e ".[dev,xls]"
 ```
 
 ### Configuration de l'environnement
@@ -59,7 +62,7 @@ pip install -r requirements.txt
 Créez un fichier `.env` à la racine du projet pour activer les sources de données réelles :
 
 ```env
-# Clé API WFP DataBridges (facultatif — des données simulées sont utilisées sans elle)
+# Clé API WFP DataBridges (facultatif - des données simulées sont utilisées sans elle)
 WFP_API_Token=votre_cle_ici
 
 # Prix du carburant manuel en XOF/litre (facultatif)
@@ -138,11 +141,14 @@ print(f"Score qualité : {rapport['quality_score']['overall']:.2f}")
 ## Lancer les tests
 
 ```bash
+# Exécution simple des tests
 pytest tests/ -q
+
+# Exécution avec rapport de couverture de code
+pytest tests/ --cov=kadi --cov-report=term-missing
 ```
 
-Les tests couvrent les 3 modules avec des mocks pour les appels réseau. Aucune
-clé API n'est nécessaire pour les faire passer.
+Les tests couvrent l'ensemble des modules applicatifs (`market`, `weather`, `kidas`), y compris les connecteurs distants (`tests/weather/test_chirps.py` couvrant 89 % du code CHIRPS sans dépendance réseau) ainsi que les composants d'infrastructure internes `kadi.cache` (`tests/test_cache.py`) et `kadi.config` (`tests/test_config.py`). Aucune clé API n'est nécessaire pour les exécuter. La CI GitHub Actions contrôle automatiquement que la couverture globale du code reste supérieure à **70 %**.
 
 ---
 
@@ -154,13 +160,13 @@ kadipy/
 │   ├── market/          # Module économie agricole
 │   ├── weather/         # Module météorologie agronomique
 │   ├── kidas/           # Module traitement des données
-│   ├── cache.py         # Cache SQLite partagé
-│   ├── config.py        # Configuration centralisée
+│   ├── cache.py         # Cache SQLite partagé (testé via tests/test_cache.py)
+│   ├── config.py        # Configuration centralisée (MODELS_DIR conservé pour v2.x ML)
 │   └── exceptions.py    # Exceptions personnalisées
 ├── tests/               # Suite de tests (pytest)
 ├── docs/                # Cette documentation
 ├── config/              # Fichiers de configuration (prix carburant...)
-└── requirements.txt
+└── pyproject.toml       # Source unique de vérité des dépendances
 ```
 
 ---

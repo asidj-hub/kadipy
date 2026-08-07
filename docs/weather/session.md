@@ -28,21 +28,21 @@ prevision = session.forecast(days=5)
 |-----|------|-------------|
 | `location` | `dict` | `{'name', 'lat', 'lon'}` |
 | `data` | `list[dict]` | Liste des jours avec `temperature_min`, `temperature_max`, `precipitation` |
-| `data_source` | `str` | Source utilisée (`'open-meteo'` ou `'cache'`) |
+| `data_source` | `str` | Source réelle utilisée (`'open-meteo'`, `'chirps'`, `'cached'` ou `'cached_offline'`) |
 | `last_updated` | `str` | Horodatage ISO de la mise à jour |
 
 ---
 
-### `historical(metric, months_back)`
+### `historical(metric, months_back, source)`
 
 Retourne les séries météo historiques depuis CHIRPS et Open-Meteo.
 
 ```python
-# Seulement les précipitations sur 6 mois
+# Seulement les précipitations sur 6 mois (mode hybride par défaut)
 df_pluie = session.historical(metric="precipitation", months_back=6)
 
-# Toutes les variables sur 10 ans
-df_complet = session.historical(months_back=120)
+# Toutes les variables sur 10 ans avec source spécifiée
+df_complet = session.historical(months_back=120, source="both")
 ```
 
 **Paramètres :**
@@ -51,8 +51,9 @@ df_complet = session.historical(months_back=120)
 |-----|------|--------|-------------|
 | `metric` | `str` | `'all'` | Filtre : `'temperature'`, `'precipitation'`, `'humidity'`, `'all'` |
 | `months_back` | `int` | `120` | Nombre de mois d'historique |
+| `source` | `str` | `None` | Source de précipitation : `'both'` (hybride CHIRPS/Open-Meteo), `'chirps'`, `'openmeteo'` |
 
-**Retour :** `pd.DataFrame` — Données indexées par date.
+**Retour :** `pd.DataFrame` - Données indexées par date.
 
 ---
 
@@ -69,8 +70,8 @@ print(f"Méthode   : {onset['method']}")  # 'Sivakumar' ou 'Walter-Anyadike'
 **Retour :** `dict` avec `onset_date`, `method`, `confidence`, `zone`.
 
 L'algorithme utilisé dépend de la zone automatiquement détectée :
-- **Nord (> 9.5° N)** : Sivakumar — saison unimodale
-- **Sud (< 7.5° N)** : Walter-Anyadike — saison bimodale
+- **Nord (> 9.5° N)** : Sivakumar - saison unimodale
+- **Sud (< 7.5° N)** : Walter-Anyadike - saison bimodale
 
 ---
 
@@ -96,7 +97,7 @@ Les GDD mesurent l'énergie thermique disponible pour le développement de la pl
 gdd = session.growing_degree_days(
     crop="maize",
     start_date="2026-05-15",   # Date de semis
-    end_date="2026-09-30",     # Optionnel — jusqu'à aujourd'hui si None
+    end_date="2026-09-30",     # Optionnel : jusqu'à aujourd'hui si None
 )
 
 print(f"GDD accumulés  : {gdd['gdd_accumulated']:.1f} °C·jour")
@@ -157,9 +158,9 @@ print(f"Sévérité    : {drought['drought_severity']}")
 
 | Méthode | Description |
 |---------|-------------|
-| `'spi'` | Standardized Precipitation Index (Z-score sur les précipitations) |
+| `'spi'` | Standardized Precipitation Index (loi Gamma McKee et al. 1993) |
 | `'markov'` | Probabilité de persistance de la sécheresse (Markov) |
-| `'hurst'` | Exposant de Hurst — mémoire longue de la sécheresse |
+| `'hurst'` | Exposant de Hurst - mémoire longue de la sécheresse |
 | `'combined'` | Combinaison pondérée des 3 méthodes |
 
 **Sévérités SPI :**

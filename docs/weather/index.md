@@ -1,4 +1,4 @@
-# kadi.weather — Météorologie agronomique
+# kadi.weather - Météorologie agronomique
 
 Le module `kadi.weather` fournit une interface unifiée pour accéder aux données
 météo historiques et prévisionnelles, et les transformer en indicateurs
@@ -14,20 +14,25 @@ chaque composant uniquement quand il est nécessaire (chargement paresseux).
 
 ```
 WeatherSession
-├── Location        — Coordonnées GPS et zone agro-écologique
-├── WeatherData     — Récupération et cache des données brutes
-├── Phenology       — Saisons, GDD, onset/cessation
-├── Hydrology       — Bilan hydrique, ET0 (FAO-56)
-└── RiskIndicators  — SPI, Markov, probabilité de pluie
+├── Location        - Coordonnées GPS et zone agro-écologique
+├── WeatherData     - Récupération et cache des données brutes
+├── Phenology       - Saisons, GDD, onset/cessation
+├── Hydrology       - Bilan hydrique, ET0 (FAO-56)
+└── RiskIndicators  - SPI, Markov, probabilité de pluie
 ```
 
-Les sources de données utilisées :
+Les sources de données utilisées (mode hybride `source='both'`) :
 
 | Source | Usage | Accès |
 |--------|-------|-------|
-| Open-Meteo | Prévisions jusqu'à 16 jours | API gratuite |
-| CHIRPS | Précipitations historiques (1981+) | API gratuite |
-| Cache SQLite | Réutilisation hors-ligne | `~/.kadi/` |
+| CHIRPS | Précipitations historiques longues (1981 à J-15) | Rasters GeoTIFF / API CHC |
+| Open-Meteo | Prévisions (15 jours) et températures historiques | API gratuite |
+| SoilGrids v2.0 | Classification pédologique WRB pour le bilan hydrique | API ISRIC (`rest.isric.org`) |
+| Cache SQLite / JSON | Stockage local et réutilisation hors-ligne | `~/.kadi/` |
+
+Les colonnes de température sont automatiquement normalisées par `_unifier_colonne_temperature()` pour produire `temperature_mean` (moyenne de `temperature_min` et `temperature_max` ou alias de `temperature_avg`).
+
+La source d'origine de chaque observation (`'chirps'`, `'open-meteo'` ou leur combinaison) est préservée de façon dynamique dans la colonne `data_source` du cache SQLite (`~/.kadi/cache.db`).
 
 ---
 
@@ -37,9 +42,9 @@ Le module détecte automatiquement la zone en fonction de la latitude :
 
 | Zone | Latitude | Caractéristiques |
 |------|---------|-----------------|
-| Nord | > 9.5° N | Régime unimodal — algorithme Sivakumar |
-| Centre | 7.5° – 9.5° N | Transition — algorithme adaptatif |
-| Sud | < 7.5° N | Régime bimodal — algorithme Walter-Anyadike |
+| Nord | > 9.5° N | Régime unimodal - algorithme Sivakumar |
+| Centre | 7.5° – 9.5° N | Transition - algorithme adaptatif |
+| Sud | < 7.5° N | Régime bimodal - algorithme Walter-Anyadike |
 
 ---
 
@@ -83,7 +88,7 @@ prevision = session.forecast(days=7)
 print(f"Lieu : {prevision['location']['name']}")
 for jour in prevision['data']:
     print(
-        f"  {jour['date']} — Pluie : {jour['precipitation']:.1f} mm, "
+        f"  {jour['date']} - Pluie : {jour['precipitation']:.1f} mm, "
         f"T min : {jour['temperature_min']:.1f}°C"
     )
 ```

@@ -62,8 +62,8 @@ rapport = validator.check_ranges({
     "rendement_kg_ha": (0, 20_000),   # Entre 0 et 20 t/ha
     "superficie_ha": (0.01, 5_000),   # Entre 10 m² et 5000 ha
     "prix_xof_kg": (10, 10_000),      # Entre 10 et 10 000 XOF/kg
-    "latitude": (6.0, 12.5),          # Bornes Bénin
-    "longitude": (0.5, 3.9),          # Bornes Bénin
+    "latitude": (2.5, 12.5),          # Bornes Bénin
+    "longitude": (-1.5, 4.0),         # Bornes Bénin
 })
 ```
 
@@ -98,7 +98,7 @@ print(f"Score global : {rapport['quality_score']['overall']:.2f}")
 # Résumé par colonne
 for col, details in rapport["columns"].items():
     if details["errors"] > 0:
-        print(f"  {col} : {details['errors']} erreurs — {details['error_type']}")
+        print(f"  {col} : {details['errors']} erreurs - {details['error_type']}")
 
 # Liste complète des avertissements
 for avertissement in rapport["warnings"]:

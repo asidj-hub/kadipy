@@ -28,15 +28,15 @@ tendance historique.
 ## Indice de sécheresse (SPI)
 
 Le Standardized Precipitation Index (SPI) mesure l'écart des précipitations
-d'une période par rapport à la normale historique, exprimé en nombre
-d'écarts-types.
+d'une période par rapport à la normale historique, selon la méthode standard de
+McKee et al. (1993) :
 
-**Formule (approximation Z-Score) :**
-```
-SPI = (P_période - P_moyenne) / σ_précipitations
-```
+1. **Ajustement d'une loi Gamma** sur les cumuls glissants strictement positifs via `scipy.stats.gamma.fit(valid_data, floc=0)`.
+2. **Correction de masse de probabilité** en zéro pour la proportion de jours sans pluie.
+3. **Transformation vers la loi normale standard** via la fonction quantile inverse (`scipy.stats.norm.ppf`).
 
 Un SPI < -1.0 indique une période sèche, un SPI < -1.5 une sécheresse marquée.
+La méthode lève `InsufficientData` si moins de 30 fenêtres sont disponibles ou si le nombre de cumuls non nuls est inférieur à 10.
 
 ### Échelle de sévérité
 
@@ -53,7 +53,7 @@ Un SPI < -1.0 indique une période sèche, un SPI < -1.5 une sécheresse marqué
 
 | Méthode | Description | Usage recommandé |
 |---------|-------------|-----------------|
-| `'spi'` | Z-Score sur les précipitations | Suivi courant, simple et rapide |
+| `'spi'` | Loi Gamma (McKee et al. 1993) et normale inverse | Suivi courant, référence OMML |
 | `'markov'` | Probabilité de persistance d'un état sec | Prévision à court terme (J+7) |
 | `'hurst'` | Exposant de Hurst (mémoire longue) | Tendances multi-annuelles |
 | `'combined'` | Combinaison pondérée des 3 méthodes | Vue d'ensemble complète |
@@ -86,9 +86,9 @@ print(f"Recommandation     : {prob['recommendation']}")
 | `recommendation` | `str` | Recommandation opérationnelle |
 
 **Exemples de recommandations :**
-- `"Évitez les traitements phytosanitaires — pluie probable demain."`
-- `"Bon moment pour les semis — 3 jours secs prévus."`
-- `"Risque de lessivage des intrants — attendez 48h."`
+- `"Évitez les traitements phytosanitaires - pluie probable demain."`
+- `"Bon moment pour les semis - 3 jours secs prévus."`
+- `"Risque de lessivage des intrants - attendez 48h."`
 
 ---
 

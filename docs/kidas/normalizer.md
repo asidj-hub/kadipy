@@ -76,8 +76,8 @@ df = normalizer.normalize_gps(lat_col="latitude", lon_col="longitude")
 
 | Vérification | Borne min | Borne max |
 |-------------|-----------|-----------|
-| Latitude | 6.0° N | 12.5° N |
-| Longitude | 0.5° E | 3.9° E |
+| Latitude | 2.5° N | 12.5° N |
+| Longitude | -1.5° E | 4.0° E |
 
 Les coordonnées hors bornes sont marquées `NaN` et signalées dans le rapport.
 

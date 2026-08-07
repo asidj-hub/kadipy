@@ -1,5 +1,5 @@
 """
-Module kadi.market.data_ingestion — DÉPRÉCIÉ depuis la v1.1.0.
+Module kadi.market.data_ingestion : DÉPRÉCIÉ depuis la v1.1.0.
 
 Ce module a été conservé pour la rétrocompatibilité des tests existants.
 Le client WFPDataBridgesClient et la fonction _get_with_retry ont été

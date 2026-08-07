@@ -101,7 +101,7 @@ Calcule le coût total de transport d'un point A vers un point B.
 cout = logistics.calculate_transfer_cost(
     origine="Parakou",
     destination="Cotonou",
-    crop="tomato",       # Optionnel — active la perte de qualité par culture
+    crop="tomato",       # Optionnel : active la perte de qualité par culture
 )
 ```
 
@@ -172,7 +172,7 @@ Le module récupère le prix de l'essence selon cette cascade :
 3. Valeur de repli : 680 XOF/litre (configurable dans `config.py`)
 
 ```env
-# .env — force le prix manuellement
+# .env : force le prix manuellement
 BENIN_FUEL_PRICE=695
 ```
 

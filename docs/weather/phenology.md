@@ -11,7 +11,7 @@ de saison des pluies) et calcule les degrés-jours de croissance (GDD) pour
 Le Bénin présente deux régimes pluviométriques distincts. Le module choisit
 l'algorithme adapté automatiquement selon la latitude.
 
-### Régime unimodal — Nord (> 9.5° N) : Sivakumar
+### Régime unimodal - Nord (> 9.5° N) : Sivakumar
 
 L'algorithme de Sivakumar définit le démarrage de la saison comme le premier
 jour après le 1er mai où les précipitations sur 20 jours consécutifs dépassent
@@ -22,7 +22,7 @@ la moitié de l'ETP sur cette période, sans séquence sèche de plus de 7 jours
 P_20j ≥ ETP_20j / 2  ET  max_séquence_sèche < 7 jours
 ```
 
-### Régime bimodal — Sud (< 7.5° N) : Walter-Anyadike
+### Régime bimodal - Sud (< 7.5° N) : Walter-Anyadike
 
 L'algorithme de Walter-Anyadike détecte les deux saisons des pluies
 caractéristiques du sud du Bénin (grande et petite saison) en analysant

@@ -47,7 +47,7 @@ pipeline.load_data("donnees_sol.nc")             # NetCDF
 pipeline.load_data("https://api.data.bj/...")   # API REST
 ```
 
-**Paramètre :** `source` — chemin de fichier ou URL.
+**Paramètre :** `source` : chemin de fichier ou URL.
 
 ---
 
@@ -66,11 +66,11 @@ pipeline.add_cleaning_step("normalize_text", columns=["culture", "marche"])
 
 | Nom | Paramètres | Description |
 |-----|-----------|-------------|
-| `remove_duplicates` | — | Supprime les lignes dupliquées |
+| `remove_duplicates` | Aucun | Supprime les lignes dupliquées |
 | `handle_missing_values` | `strategy`: `'mean'`, `'median'`, `'drop'` | Impute ou supprime les valeurs manquantes |
 | `remove_outliers` | `method`: `'zscore'`/`'iqr'`, `threshold` | Supprime les valeurs aberrantes |
 | `normalize_text` | `columns`: liste | Nettoie accents, majuscules, espaces |
-| `fix_encoding` | — | Corrige les problèmes d'encodage |
+| `fix_encoding` | Aucun | Corrige les problèmes d'encodage |
 
 ---
 
@@ -111,6 +111,8 @@ pipeline.add_normalization_step({
 ### `execute(cache)`
 
 Exécute toutes les étapes enregistrées et retourne le résultat.
+Lorsque `cache=True`, la clé de cache est calculée via une empreinte **SHA-256** déterministe
+(reproductible entre sessions Python) basée sur le chemin du fichier source et la suite des étapes.
 
 ```python
 df, rapport = pipeline.execute(cache=True)
@@ -120,7 +122,7 @@ df, rapport = pipeline.execute(cache=True)
 
 | Nom | Type | Défaut | Description |
 |-----|------|--------|-------------|
-| `cache` | `bool` | `True` | Si True, met en cache le résultat dans SQLite |
+| `cache` | `bool` | `True` | Si True, réutilise le résultat mis en cache (hachage SHA-256) |
 
 **Retour :** `tuple[pd.DataFrame, dict]`
 

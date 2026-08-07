@@ -49,14 +49,21 @@ Où :
 - `ETc` = Évapotranspiration de la culture = ET0 × Kc
 - `RU_max` = Capacité maximale de rétention du sol
 
-### Types de sols béninois supportés
+### Types de sols béninois et détection automatique (SoilGrids v2.0)
 
-| Code | Nom | RU max (mm) | Ksat (mm/h) |
-|------|-----|-------------|-------------|
-| `ferrugineux` | Sol ferrugineux tropical | 80 | 15 |
-| `vertisol` | Vertisol argileux | 120 | 5 |
-| `hydromorphe` | Sol hydromorphe | 150 | 2 |
-| `sableux` | Sol sableux | 50 | 40 |
+Le type de sol conditionne la capacité maximale de rétention d'eau (`RU_max`) et la vitesse d'infiltration (`Ksat`).
+
+| Code KadiPy | Nom scientifique / WRB | RU max (mm) | Ksat (mm/h) | Localisation principale |
+|-------------|-----------------------|-------------|-------------|-------------------------|
+| `ferrugineux` | Lixisol, Acrisol, Alisol | 80 | 15 | Sols ferrugineux tropicaux (Centre/Nord, dominant) |
+| `ferrallitique` | Ferralsol, Plinthosol, Nitisol | 100 | 12 | Sols rouges altérés (Sud-Bénin) |
+| `limoneux` | Luvisol, Cambisol, Gleysol, Fluvisol | 120 | 8 | Alluvions et couloirs fluviaux (Ouémé, Mono) |
+| `sableux` | Arenosol, Regosol, Psammosol | 50 | 40 | Sables côtiers et dunaires (littoral et Sahel) |
+
+Le module `kadi._sources.soilgrids` interroge automatiquement l'API **SoilGrids v2.0** de l'ISRIC (`/classification/query`) selon une cascade à 3 niveaux :
+1. **Cache local JSON** (`~/.kadi/soilgrids_cache.json`) pour les points à moins de 25 km.
+2. **API SoilGrids v2.0** avec conversion automatique de la classe WRB vers la nomenclature KadiPy.
+3. **Repli statique** sur `'ferrugineux'` (sol le plus représenté au Bénin) si l'API est inaccessible.
 
 ---
 
@@ -128,7 +135,7 @@ print(f"ET0 fin décembre : {et0_decembre:.2f} mm/jour")
 | `temperature_min` | °C | Température minimale |
 | `temperature_max` | °C | Température maximale |
 | `ET0` | mm | Évapotranspiration de référence (Hargreaves) |
-| `Kc` | — | Coefficient cultural de la culture sélectionnée |
+| `Kc` | - | Coefficient cultural de la culture sélectionnée |
 | `ETc` | mm | Évapotranspiration de la culture = ET0 × Kc |
 | `deficit_eau` | mm | Manque d'eau journalier (max(0, ETc - Pluie)) |
 | `reserve_utile` | mm | Eau disponible dans la réserve utile du sol |

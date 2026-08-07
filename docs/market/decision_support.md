@@ -11,7 +11,7 @@ et le module utilise `scipy.optimize.linprog` pour l'optimisation de portefeuill
 
 ## Initialisation
 
-Via la façade `Market` (recommandé — tous les modules sont connectés) :
+Via la façade `Market` (recommandé : tous les modules sont connectés) :
 
 ```python
 from kadi.market import Market
@@ -175,15 +175,17 @@ for culture, ha in decision["repartition_hectares"].items():
     print(f"  {culture} : {ha:.2f} ha")
 ```
 
-**Modèle d'optimisation linéaire :**
+**Modèle d'optimisation (méthode `scipy_linprog` ou `heuristique`) :**
 
 ```
-Maximiser  : Σ (prix_i × rendement_i × x_i)
+Maximiser  : Σ (surface_i × rendement_i × 1000 × prix_xof_kg_i)
 Contraintes:
-    Σ x_i ≤ surface_totale
-    x_i ≥ 0
-    x_i ≤ 0.7 × surface_totale  (diversification minimale)
+    Σ surface_i ≤ surface_totale
+    surface_i ≥ 0
+    surface_i ≤ 0.7 × surface_totale  (diversification minimale)
 ```
+
+En mode de repli `'heuristique'`, le revenu attendu `revenu_attendu_cfa` est calculé dynamiquement par le produit direct `surface_ha × rendement_t_ha × 1000 × prix_xof_kg` cumulé sur toutes les cultures du portefeuille.
 
 **Ajustements climatiques automatiques :**
 

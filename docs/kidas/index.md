@@ -1,4 +1,4 @@
-# kadi.kidas — Traitement et standardisation des données
+# kadi.kidas : Traitement et standardisation des données
 
 Le module `kadi.kidas` est le pipeline de traitement des données agricoles de
 KadiPy. Il prend en charge l'ingestion, le nettoyage, la validation et la
@@ -114,10 +114,10 @@ print(f"Lignes en sortie : {rapport['nb_rows_out']}")
 
 ## Sous-modules
 
-- [Pipeline](pipeline.md) — Orchestration des étapes de traitement
-- [Nettoyage (DataCleaner)](cleaner.md) — Doublons, valeurs manquantes, outliers
-- [Validation (DataValidator)](validator.md) — Règles de validation des données
-- [Normalisation (DataNormalizer)](normalizer.md) — Standardisation des noms et unités
+- [Pipeline](pipeline.md) : Orchestration des étapes de traitement
+- [Nettoyage (DataCleaner)](cleaner.md) : Doublons, valeurs manquantes, outliers
+- [Validation (DataValidator)](validator.md) : Règles de validation des données
+- [Normalisation (DataNormalizer)](normalizer.md) : Standardisation des noms et unités
 
 ---
 

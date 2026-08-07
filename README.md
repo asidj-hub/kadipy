@@ -1,7 +1,7 @@
 # KadiPy
 
 <div style="display: flex; justify-content: center;">
-    <img src="img/logo.png" alt="KadiPy" width="300px">
+    <img src="img/logo.png" alt="KadiPy" width="20%">
 </div>
 
 **Le "pandas" de l'agriculture africaine.**
@@ -17,7 +17,11 @@ avec une approche hors ligne en premier (offline-first).
 ## Installation
 
 ```bash
+# Depuis PyPI
 pip install kadipy
+
+# Ou en mode développement local depuis les sources
+pip install -e ".[dev]"
 ```
 
 Nécessite Python 3.9 ou supérieur.

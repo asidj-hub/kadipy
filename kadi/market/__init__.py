@@ -503,12 +503,12 @@ class Market:
 
         Returns:
             dict: Dictionnaire contenant :
-                - 'weather_available'  : bool — True si weather_session est actif
-                - 'prob_pluie'         : dict — probabilités de pluie par jour
-                - 'drought_index'      : dict — indice de sécheresse (SPI et sévérité)
-                - 'recommendation'     : str — message de synthèse
-                - 'prob_pluie_j1'      : float — probabilité de pluie demain (0 à 1)
-                - 'drought_severity'   : str — sévérité de la sécheresse
+                - 'weather_available'  : bool : True si weather_session est actif
+                - 'prob_pluie'         : dict : probabilités de pluie par jour
+                - 'drought_index'      : dict : indice de sécheresse (SPI et sévérité)
+                - 'recommendation'     : str : message de synthèse
+                - 'prob_pluie_j1'      : float : probabilité de pluie demain (0 à 1)
+                - 'drought_severity'   : str : sévérité de la sécheresse
         """
         if self.weather_session is None:
             # Aucun module météo injecté : retour neutre
